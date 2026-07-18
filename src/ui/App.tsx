@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_TARGET_FRACTION } from '../engine/constants.ts';
 import { solve } from '../engine/index.ts';
 import {
@@ -11,6 +11,8 @@ import {
 } from '../data/scenario.ts';
 import { GridView } from './GridView.tsx';
 import { CostTargetCurve } from './CostTargetCurve.tsx';
+import { TourPanel } from './TourPanel.tsx';
+import { TOUR_STEPS, type TourRegion } from './tour.ts';
 import { hexToRgb, mix, type Rgb } from './color.ts';
 
 const FEATURE_LO: Rgb = [245, 245, 245];
@@ -97,6 +99,24 @@ export function App() {
   const costRange = useMemo(() => costRangeOf(units), [units]);
   const totalUnits = units.length;
 
+  // Guided tour (lightweight: narrate + highlight an existing region).
+  const rootRef = useRef<HTMLElement | null>(null);
+  const [tourStep, setTourStep] = useState<number | null>(null);
+  const tourActive = tourStep !== null;
+  const currentStep = tourStep === null ? null : (TOUR_STEPS[tourStep] ?? null);
+
+  useEffect(() => {
+    if (currentStep === null) return;
+    const el = rootRef.current?.querySelector(`[data-region="${currentStep.region}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [currentStep]);
+
+  const tourHi = (key: TourRegion) =>
+    currentStep?.region === key ? ' tour-highlight' : '';
+  const nextStep = () =>
+    setTourStep((s) => (s === null || s + 1 >= TOUR_STEPS.length ? null : s + 1));
+  const backStep = () => setTourStep((s) => (s === null ? s : Math.max(0, s - 1)));
+
   const setFraction = (id: string, pct: number) =>
     setFractions((prev) => ({ ...prev, [id]: pct / 100 }));
 
@@ -145,17 +165,27 @@ export function App() {
             : 'Edit: clear lock status';
 
   return (
-    <main className="app">
-      <h1>SCP Tutorial</h1>
-      <p className="tagline">
-        Set a target for each feature and paint the landscape. The solver picks the
-        lowest-cost set of areas that meets every target, and re-solves as you change
-        things.
-      </p>
+    <main className={tourActive ? 'app tour-active' : 'app'} ref={rootRef}>
+      <div className={`title-row${tourHi('intro')}`} data-region="intro">
+        <div>
+          <h1>SCP Tutorial</h1>
+          <p className="tagline">
+            Set a target for each feature and paint the landscape. The solver picks the
+            lowest-cost set of areas that meets every target, and re-solves as you
+            change things.
+          </p>
+        </div>
+        <button type="button" className="tour-start" onClick={() => setTourStep(0)}>
+          Guided tour
+        </button>
+      </div>
 
       <div className="layout">
         <div className="sidebar">
-          <section className="panel controls">
+          <section
+            className={`panel controls${tourHi('targets')}`}
+            data-region="targets"
+          >
             <h2>Targets</h2>
             {SCENARIO.features.map((f) => {
               const pct = Math.round((fractions[f.id] ?? 0) * 100);
@@ -177,7 +207,7 @@ export function App() {
             })}
           </section>
 
-          <section className="panel controls">
+          <section className={`panel controls${tourHi('edit')}`} data-region="edit">
             <h2>Edit tools</h2>
             <div className="tool-row">
               {TOOLS.map((t) => (
@@ -296,7 +326,7 @@ export function App() {
           </div>
 
           <div className="editor-row">
-            <div className="editor-map">
+            <div className={`editor-map${tourHi('priority')}`} data-region="priority">
               <h2>Priority areas</h2>
               <div className="maps">
                 <GridView
@@ -315,13 +345,15 @@ export function App() {
                 />
               </div>
             </div>
-            <CostTargetCurve
-              units={units}
-              fractions={fractions}
-              focusId={curveFocus}
-              focusName={featureName(curveFocus)}
-              color={featureColor(curveFocus)}
-            />
+            <div className={`curve-wrap${tourHi('curve')}`} data-region="curve">
+              <CostTargetCurve
+                units={units}
+                fractions={fractions}
+                focusId={curveFocus}
+                focusName={featureName(curveFocus)}
+                color={featureColor(curveFocus)}
+              />
+            </div>
           </div>
 
           <div className="curve-select">
@@ -338,19 +370,35 @@ export function App() {
             ))}
           </div>
 
-          <h2>Conservation features</h2>
-          <div className="maps">
-            {SCENARIO.features.map((f) => (
-              <GridView
-                key={f.id}
-                gridSize={SCENARIO.gridSize}
-                caption={`${f.name} (darker = more)`}
-                fill={featureFill(f.id)}
-              />
-            ))}
+          <div
+            className={`feature-section${tourHi('features')}`}
+            data-region="features"
+          >
+            <h2>Conservation features</h2>
+            <div className="maps">
+              {SCENARIO.features.map((f) => (
+                <GridView
+                  key={f.id}
+                  gridSize={SCENARIO.gridSize}
+                  caption={`${f.name} (darker = more)`}
+                  fill={featureFill(f.id)}
+                />
+              ))}
+            </div>
           </div>
         </section>
       </div>
+
+      {currentStep !== null && tourStep !== null && (
+        <TourPanel
+          step={currentStep}
+          index={tourStep}
+          total={TOUR_STEPS.length}
+          onBack={backStep}
+          onNext={nextStep}
+          onClose={() => setTourStep(null)}
+        />
+      )}
     </main>
   );
 }

@@ -47,6 +47,146 @@ body {
   max-width: 44rem;
 }
 
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.tour-start {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  background: #1b7837;
+  border: 1px solid #1b7837;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tour-start:hover {
+  background: #155e2b;
+}
+
+.app.tour-active {
+  padding-bottom: 13rem;
+}
+
+.tour-highlight {
+  outline: 3px solid #1b7837;
+  outline-offset: 6px;
+  border-radius: 8px;
+  scroll-margin: 6rem;
+}
+
+.curve-wrap {
+  flex: 0 1 18rem;
+}
+
+.tour-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  padding: 1rem 1.5rem;
+  background: var(--panel);
+  border-top: 2px solid #1b7837;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18);
+}
+
+.tour-content {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
+.tour-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.tour-count {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tour-dots {
+  display: flex;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tour-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.tour-dot-active {
+  background: #1b7837;
+}
+
+.tour-title {
+  font-size: 1.05rem;
+  margin: 0 0 0.2rem;
+}
+
+.tour-body {
+  margin: 0;
+  font-size: 0.9rem;
+  max-width: 46rem;
+}
+
+.tour-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.tour-btn {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tour-btn:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.tour-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tour-btn-primary {
+  color: #fff;
+  background: #1b7837;
+  border-color: #1b7837;
+  font-weight: 600;
+}
+
+.tour-btn-primary:hover {
+  background: #155e2b;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(14rem, 18rem) 1fr;

@@ -67,6 +67,11 @@ chosen); the current maps already make the effect visible.
 Done when: a newcomer can walk the whole process end to end on the example and
 understand where prioritization sits within it.
 
+Delivered as a lightweight, data-driven stepper (narrate plus highlight an
+existing region). The tour is a list of steps in `src/ui/tour.ts`; a richer
+walkthrough (staged reveal, per-step presets, gating advance on an action) is a
+later extension by adding optional fields to the step type, not a rewrite.
+
 ## M5: Method deep-dive (Track 3)
 
 - Advanced panel: minimum-set versus maximum-coverage under a budget, a

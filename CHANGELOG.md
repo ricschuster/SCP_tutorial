@@ -33,3 +33,7 @@ All notable changes to this project are documented here. The format is based on
   a reset; locked units shown on the maps; and a cost-versus-target curve (total
   cost as one feature's target is swept, other targets held) with a feature
   selector.
+- M4 guided tour (Track 2): a lightweight, data-driven stepper that walks the
+  full planning process (goals, features, targets, prioritize, tradeoff,
+  constraints) by narrating and highlighting the relevant panel at each step,
+  reachable from a header button. Built to extend to a richer walkthrough later.
