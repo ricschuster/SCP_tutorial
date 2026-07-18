@@ -7,7 +7,12 @@
 // features are and where cost is cheap is what makes prioritization interesting.
 
 import { GRID_SIZE } from '../engine/constants.ts';
-import type { Feature, PlanningUnit, Problem } from '../engine/types.ts';
+import type {
+  Feature,
+  PlanningUnit,
+  PlanningUnitStatus,
+  Problem,
+} from '../engine/types.ts';
 
 export interface ScenarioFeature {
   readonly id: string;
@@ -145,18 +150,83 @@ export const COST_RANGE: { readonly min: number; readonly max: number } = (() =>
   return { min, max };
 })();
 
-// Build a solvable Problem from the landscape and a target fraction per feature.
+// Build a solvable Problem from the base landscape and a target fraction per
+// feature (all units available).
 export function toProblem(targetFractions: Readonly<Record<string, number>>): Problem {
-  const units: PlanningUnit[] = SCENARIO.units.map((u): PlanningUnit => ({
+  return toProblemFromUnits(makeWorkingUnits(), targetFractions);
+}
+
+// An editable copy of a planning unit. The UI keeps an array of these in state
+// so costs, feature amounts, and lock status can be painted on the map.
+export interface WorkingUnit {
+  id: number;
+  row: number;
+  col: number;
+  cost: number;
+  amounts: Record<string, number>;
+  status: PlanningUnitStatus;
+}
+
+type HasAmounts = { readonly amounts: Readonly<Record<string, number>> };
+
+// Total amount of a feature across a given set of units (the target denominator).
+export function featureTotalOf(
+  units: readonly HasAmounts[],
+  featureId: string,
+): number {
+  let total = 0;
+  for (const unit of units) total += unit.amounts[featureId] ?? 0;
+  return total;
+}
+
+// Largest single-unit amount of a feature across a given set of units.
+export function featureMaxOf(units: readonly HasAmounts[], featureId: string): number {
+  let max = 0;
+  for (const unit of units) max = Math.max(max, unit.amounts[featureId] ?? 0);
+  return max;
+}
+
+export function costRangeOf(units: readonly { readonly cost: number }[]): {
+  min: number;
+  max: number;
+} {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const unit of units) {
+    min = Math.min(min, unit.cost);
+    max = Math.max(max, unit.cost);
+  }
+  return { min, max };
+}
+
+// A fresh editable copy of the starter landscape (all units available).
+export function makeWorkingUnits(): WorkingUnit[] {
+  return SCENARIO.units.map((u) => ({
+    id: u.id,
+    row: u.row,
+    col: u.col,
+    cost: u.cost,
+    amounts: { ...u.amounts },
+    status: 'available',
+  }));
+}
+
+// Build a Problem from an editable landscape. Targets are a fraction of each
+// feature's total amount in the current (possibly edited) landscape.
+export function toProblemFromUnits(
+  units: readonly WorkingUnit[],
+  targetFractions: Readonly<Record<string, number>>,
+): Problem {
+  const problemUnits: PlanningUnit[] = units.map((u): PlanningUnit => ({
     id: u.id,
     cost: u.cost,
-    status: 'available',
+    status: u.status,
     amounts: u.amounts,
   }));
   const features: Feature[] = SCENARIO.features.map((f): Feature => ({
     id: f.id,
     name: f.name,
-    target: featureTotal(f.id) * (targetFractions[f.id] ?? 0),
+    target: featureTotalOf(units, f.id) * (targetFractions[f.id] ?? 0),
   }));
-  return { units, features };
+  return { units: problemUnits, features };
 }

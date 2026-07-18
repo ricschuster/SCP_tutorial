@@ -28,3 +28,8 @@ All notable changes to this project are documented here. The format is based on
   corner) authored as data; per-feature target sliders that re-solve live; and
   maps for the selected priorities, cost, and each feature's amounts, with a
   total-cost, areas-selected, and per-feature attainment readout.
+- M3 interaction: a brush palette to edit the landscape on the map (paint feature
+  amounts, paint cost, lock in / lock out / clear a unit) with live re-solve and
+  a reset; locked units shown on the maps; and a cost-versus-target curve (total
+  cost as one feature's target is swept, other targets held) with a feature
+  selector.
