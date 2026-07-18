@@ -23,3 +23,8 @@ All notable changes to this project are documented here. The format is based on
   marginal-gain minimum-set solver with deterministic tie-breaking, target
   attainment and total-cost helpers, and locked-in / locked-out handling.
   Hand-checked Vitest suite (19 tests).
+- M2 core loop, visualized (Track 1 MVP): the starter synthetic landscape (10x10
+  grid, three clustered features, a cost surface rising toward a developed
+  corner) authored as data; per-feature target sliders that re-solve live; and
+  maps for the selected priorities, cost, and each feature's amounts, with a
+  total-cost, areas-selected, and per-feature attainment readout.
