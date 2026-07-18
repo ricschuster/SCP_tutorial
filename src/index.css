@@ -498,3 +498,23 @@ body {
   align-items: center;
   gap: 0.4rem;
 }
+
+.compare-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.compare-head h2 {
+  margin: 0;
+}
+
+.compare-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.5rem 2rem;
+  margin-top: 1rem;
+}

@@ -85,13 +85,17 @@ Split into two shippable halves.
 Done when: a learner can switch objectives, set a budget, add a compactness
 penalty, and weight features, and watch the greedy solution respond.
 
-### M5b: exact ILP solver
+### M5b: exact solver [done]
 
-- Exact ILP solver (glpk.js / WebAssembly) on small instances, presented next to
-  greedy for a greedy-versus-optimal comparison.
+- Exact minimum-set optimum on small instances (pure-JS MILP solver,
+  javascript-lp-solver; loaded lazily), presented next to greedy for a
+  greedy-versus-optimal comparison (cost gap plus a selection-diff map.)
 
 Done when: a curious learner can compare the greedy solution against the exact
 optimum on the example landscape.
+
+Note: implemented with javascript-lp-solver rather than glpk.js; see the solver
+ADR update for why.
 
 ## Later / backlog (post-MVP, each needs its own design + ADR)
 
