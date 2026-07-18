@@ -10,3 +10,4 @@ All notable changes to this project are documented here. The format is based on
 - Initial project harness: issue and PR templates, contribution and security
   policies, docs structure (design, decisions, handoffs), and Claude Code
   working rules.
+- GNU General Public License v3.0.
