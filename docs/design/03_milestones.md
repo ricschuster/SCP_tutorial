@@ -44,13 +44,18 @@ attainment on the example landscape.
 
 ## M3: Interaction and intuition
 
-- Edit costs and toggle locked-in / locked-out units, with live re-solve.
-- Reset / revert.
-- Complementarity cue (show why multi-feature units are chosen).
-- A short cost-versus-target view (how cost moves as a target changes).
+- A brush palette for editing the landscape on the map: paint feature amounts,
+  paint cost, and lock-in / lock-out / clear a unit's status. Live re-solve.
+- Reset landscape.
+- A cost-versus-target curve (total cost as one feature's target is swept, with
+  the other targets held), with a feature selector.
 
-Done when: a learner can change targets, costs, and constraints and watch the
-solution adapt, and can see the cost-versus-target tradeoff.
+Done when: a learner can change targets, costs, feature amounts, and lock
+constraints and watch the solution adapt, and can see the cost-versus-target
+tradeoff.
+
+Deferred to backlog: an explicit complementarity cue (why multi-feature units are
+chosen); the current maps already make the effect visible.
 
 ## M4: Full SCP process (Track 2)
 

@@ -22,17 +22,28 @@ test('App renders the title and target controls', async () => {
   const { container, cleanup } = await render();
   expect(container.textContent).toContain('SCP Tutorial');
   expect(container.textContent).toContain('Forest species');
-  expect(container.querySelectorAll('input[type="range"]').length).toBe(3);
+  // At least the three per-feature target sliders are present.
+  expect(
+    container.querySelectorAll('input[type="range"]').length,
+  ).toBeGreaterThanOrEqual(3);
   cleanup();
 });
 
 test('App solves and shows a priority map, cost, and attainment', async () => {
   const { container, cleanup } = await render();
-  // The solver selected some units: priority cells are filled with the accent.
   const selected = container.querySelectorAll('rect[fill="rgb(27 120 55)"]');
   expect(selected.length).toBeGreaterThan(0);
-  // The stats and attainment readouts are present.
   expect(container.textContent).toContain('Total cost');
   expect(container.textContent).toContain('Areas selected');
+  cleanup();
+});
+
+test('App exposes an editable map and a reset control', async () => {
+  const { container, cleanup } = await render();
+  expect(container.querySelector('svg.grid-svg-editable')).not.toBeNull();
+  const reset = [...container.querySelectorAll('button')].find(
+    (b) => b.textContent === 'Reset landscape',
+  );
+  expect(reset).toBeDefined();
   cleanup();
 });

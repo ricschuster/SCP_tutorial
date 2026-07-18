@@ -1,8 +1,16 @@
 import { useMemo, useState } from 'react';
 import { DEFAULT_TARGET_FRACTION } from '../engine/constants.ts';
 import { solve } from '../engine/index.ts';
-import { COST_RANGE, featureMax, SCENARIO, toProblem } from '../data/scenario.ts';
+import {
+  costRangeOf,
+  featureMaxOf,
+  makeWorkingUnits,
+  SCENARIO,
+  toProblemFromUnits,
+  type WorkingUnit,
+} from '../data/scenario.ts';
 import { GridView } from './GridView.tsx';
+import { CostTargetCurve } from './CostTargetCurve.tsx';
 import { hexToRgb, mix, type Rgb } from './color.ts';
 
 const FEATURE_LO: Rgb = [245, 245, 245];
@@ -10,59 +18,238 @@ const COST_LO: Rgb = [235, 237, 232];
 const COST_HI: Rgb = [60, 60, 60];
 const SELECTED = 'rgb(27 120 55)';
 const UNSELECTED = 'rgb(230 230 230)';
+const LOCK_IN = '#1b7837';
+const LOCK_OUT = '#c0392b';
 
-function costFill(unitId: number): string {
-  const cost = SCENARIO.units[unitId]?.cost ?? COST_RANGE.min;
-  const span = COST_RANGE.max - COST_RANGE.min;
-  const t = span > 0 ? (cost - COST_RANGE.min) / span : 0;
-  return mix(COST_LO, COST_HI, t);
+const AMOUNT_MAX = 12;
+const COST_MAX = 15;
+
+type Tool = 'amount' | 'cost' | 'lockIn' | 'lockOut' | 'clear';
+
+interface Brush {
+  tool: Tool;
+  featureId: string;
+  amountValue: number;
+  costValue: number;
 }
 
+const FIRST_FEATURE = SCENARIO.features[0]?.id ?? '';
+
+function featureColor(id: string): string {
+  return SCENARIO.features.find((f) => f.id === id)?.color ?? '#333';
+}
+
+function featureName(id: string): string {
+  return SCENARIO.features.find((f) => f.id === id)?.name ?? id;
+}
+
+function applyBrush(unit: WorkingUnit, brush: Brush): WorkingUnit {
+  switch (brush.tool) {
+    case 'amount': {
+      const amounts = { ...unit.amounts };
+      if (brush.amountValue <= 0) delete amounts[brush.featureId];
+      else amounts[brush.featureId] = brush.amountValue;
+      return { ...unit, amounts };
+    }
+    case 'cost':
+      return { ...unit, cost: Math.max(1, brush.costValue) };
+    case 'lockIn':
+      return { ...unit, status: 'locked-in' };
+    case 'lockOut':
+      return { ...unit, status: 'locked-out' };
+    case 'clear':
+      return { ...unit, status: 'available' };
+    default:
+      return unit;
+  }
+}
+
+const TOOLS: { id: Tool; label: string }[] = [
+  { id: 'amount', label: 'Feature' },
+  { id: 'cost', label: 'Cost' },
+  { id: 'lockIn', label: 'Lock in' },
+  { id: 'lockOut', label: 'Lock out' },
+  { id: 'clear', label: 'Clear' },
+];
+
 export function App() {
+  const [units, setUnits] = useState<WorkingUnit[]>(() => makeWorkingUnits());
+  const [edited, setEdited] = useState(false);
   const [fractions, setFractions] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {};
     for (const f of SCENARIO.features) init[f.id] = DEFAULT_TARGET_FRACTION;
     return init;
   });
+  const [brush, setBrush] = useState<Brush>({
+    tool: 'amount',
+    featureId: FIRST_FEATURE,
+    amountValue: 8,
+    costValue: 6,
+  });
+  const [curveFocus, setCurveFocus] = useState(FIRST_FEATURE);
 
-  const solution = useMemo(() => solve(toProblem(fractions)), [fractions]);
+  const solution = useMemo(
+    () => solve(toProblemFromUnits(units, fractions)),
+    [units, fractions],
+  );
   const selectedSet = useMemo(() => new Set(solution.selected), [solution]);
-  const totalUnits = SCENARIO.units.length;
+  const unitsById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
+  const costRange = useMemo(() => costRangeOf(units), [units]);
+  const totalUnits = units.length;
 
   const setFraction = (id: string, pct: number) =>
     setFractions((prev) => ({ ...prev, [id]: pct / 100 }));
+
+  const paint = (id: number) => {
+    setUnits((prev) => prev.map((u) => (u.id === id ? applyBrush(u, brush) : u)));
+    setEdited(true);
+  };
+
+  const reset = () => {
+    setUnits(makeWorkingUnits());
+    setEdited(false);
+  };
+
+  const costFill = (id: number): string => {
+    const cost = unitsById.get(id)?.cost ?? costRange.min;
+    const span = costRange.max - costRange.min;
+    const t = span > 0 ? (cost - costRange.min) / span : 0;
+    return mix(COST_LO, COST_HI, t);
+  };
+
+  const featureFill = (featureId: string) => {
+    const to = hexToRgb(featureColor(featureId));
+    const max = featureMaxOf(units, featureId) || 1;
+    return (id: number) =>
+      mix(FEATURE_LO, to, (unitsById.get(id)?.amounts[featureId] ?? 0) / max);
+  };
+
+  const editFill = brush.tool === 'amount' ? featureFill(brush.featureId) : costFill;
+
+  const statusBorder = (id: number): string | null => {
+    const status = unitsById.get(id)?.status;
+    if (status === 'locked-in') return LOCK_IN;
+    if (status === 'locked-out') return LOCK_OUT;
+    return null;
+  };
+
+  const editCaption =
+    brush.tool === 'amount'
+      ? `Edit: paint ${featureName(brush.featureId)}`
+      : brush.tool === 'cost'
+        ? 'Edit: paint cost'
+        : brush.tool === 'lockIn'
+          ? 'Edit: lock in (always protect)'
+          : brush.tool === 'lockOut'
+            ? 'Edit: lock out (never protect)'
+            : 'Edit: clear lock status';
 
   return (
     <main className="app">
       <h1>SCP Tutorial</h1>
       <p className="tagline">
-        Set a representation target for each feature. The solver picks the lowest-cost
-        set of areas that meets every target.
+        Set a target for each feature and paint the landscape. The solver picks the
+        lowest-cost set of areas that meets every target, and re-solves as you change
+        things.
       </p>
 
       <div className="layout">
-        <section className="panel controls">
-          <h2>Targets</h2>
-          {SCENARIO.features.map((f) => {
-            const pct = Math.round((fractions[f.id] ?? 0) * 100);
-            return (
-              <label className="control" key={f.id}>
-                <span className="control-label">
-                  <span className="swatch" style={{ background: f.color }} />
-                  {f.name}: {pct}%
-                </span>
+        <div className="sidebar">
+          <section className="panel controls">
+            <h2>Targets</h2>
+            {SCENARIO.features.map((f) => {
+              const pct = Math.round((fractions[f.id] ?? 0) * 100);
+              return (
+                <label className="control" key={f.id}>
+                  <span className="control-label">
+                    <span className="swatch" style={{ background: f.color }} />
+                    {f.name}: {pct}%
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={pct}
+                    onChange={(e) => setFraction(f.id, Number(e.target.value))}
+                  />
+                </label>
+              );
+            })}
+          </section>
+
+          <section className="panel controls">
+            <h2>Edit tools</h2>
+            <div className="tool-row">
+              {TOOLS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={t.id === brush.tool ? 'tool tool-on' : 'tool'}
+                  onClick={() => setBrush((b) => ({ ...b, tool: t.id }))}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {brush.tool === 'amount' && (
+              <>
+                <div className="tool-row">
+                  {SCENARIO.features.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      className={f.id === brush.featureId ? 'tool tool-on' : 'tool'}
+                      onClick={() => setBrush((b) => ({ ...b, featureId: f.id }))}
+                    >
+                      <span className="swatch" style={{ background: f.color }} />
+                      {f.name.replace(' species', '')}
+                    </button>
+                  ))}
+                </div>
+                <label className="control">
+                  <span className="control-label">Amount: {brush.amountValue}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={AMOUNT_MAX}
+                    value={brush.amountValue}
+                    onChange={(e) =>
+                      setBrush((b) => ({ ...b, amountValue: Number(e.target.value) }))
+                    }
+                  />
+                </label>
+              </>
+            )}
+
+            {brush.tool === 'cost' && (
+              <label className="control">
+                <span className="control-label">Cost: {brush.costValue}</span>
                 <input
                   type="range"
-                  min={0}
-                  max={100}
-                  value={pct}
-                  onChange={(e) => setFraction(f.id, Number(e.target.value))}
+                  min={1}
+                  max={COST_MAX}
+                  value={brush.costValue}
+                  onChange={(e) =>
+                    setBrush((b) => ({ ...b, costValue: Number(e.target.value) }))
+                  }
                 />
               </label>
-            );
-          })}
-          <p className="hint">Priorities update as you drag.</p>
-        </section>
+            )}
+
+            <div className="edit-actions">
+              <span className="hint">Click or drag on the edit map.</span>
+              <button
+                type="button"
+                className="reset"
+                onClick={reset}
+                disabled={!edited}
+              >
+                Reset landscape
+              </button>
+            </div>
+          </section>
+        </div>
 
         <section className="results">
           <div className="panel stats">
@@ -78,19 +265,18 @@ export function App() {
             </div>
             <div className="attainments">
               {solution.attainment.map((a) => {
-                const f = SCENARIO.features.find((x) => x.id === a.featureId);
                 const pct = a.target > 0 ? Math.min(1, a.represented / a.target) : 1;
                 return (
                   <div className="attain" key={a.featureId}>
                     <span className="attain-label">
-                      {f?.name ?? a.featureId} {a.met ? '✓' : ''}
+                      {featureName(a.featureId)} {a.met ? '✓' : ''}
                     </span>
                     <span className="bar">
                       <span
                         className="bar-fill"
                         style={{
                           width: `${Math.round(pct * 100)}%`,
-                          background: f?.color ?? SELECTED,
+                          background: featureColor(a.featureId),
                         }}
                       />
                     </span>
@@ -103,42 +289,65 @@ export function App() {
             </div>
             {!solution.feasible && (
               <p className="warn">
-                Targets cannot be met: {solution.shortfallFeatures.join(', ')}.
+                Targets cannot be met (too much locked out or too little habitat):{' '}
+                {solution.shortfallFeatures.map(featureName).join(', ')}.
               </p>
             )}
           </div>
 
-          <h2>Priority areas</h2>
-          <div className="maps">
-            <GridView
-              gridSize={SCENARIO.gridSize}
-              caption="Selected priorities"
-              fill={(id) => (selectedSet.has(id) ? SELECTED : UNSELECTED)}
-              selected={selectedSet}
+          <div className="editor-row">
+            <div className="editor-map">
+              <h2>Priority areas</h2>
+              <div className="maps">
+                <GridView
+                  gridSize={SCENARIO.gridSize}
+                  caption="Selected priorities"
+                  fill={(id) => (selectedSet.has(id) ? SELECTED : UNSELECTED)}
+                  selected={selectedSet}
+                  border={statusBorder}
+                />
+                <GridView
+                  gridSize={SCENARIO.gridSize}
+                  caption={editCaption}
+                  fill={editFill}
+                  border={statusBorder}
+                  onPaint={paint}
+                />
+              </div>
+            </div>
+            <CostTargetCurve
+              units={units}
+              fractions={fractions}
+              focusId={curveFocus}
+              focusName={featureName(curveFocus)}
+              color={featureColor(curveFocus)}
             />
-            <GridView
-              gridSize={SCENARIO.gridSize}
-              caption="Cost (darker = costlier)"
-              fill={costFill}
-            />
+          </div>
+
+          <div className="curve-select">
+            <span className="hint">Cost curve for:</span>
+            {SCENARIO.features.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className={f.id === curveFocus ? 'tool tool-on' : 'tool'}
+                onClick={() => setCurveFocus(f.id)}
+              >
+                {f.name.replace(' species', '')}
+              </button>
+            ))}
           </div>
 
           <h2>Conservation features</h2>
           <div className="maps">
-            {SCENARIO.features.map((f) => {
-              const max = featureMax(f.id) || 1;
-              const to = hexToRgb(f.color);
-              return (
-                <GridView
-                  key={f.id}
-                  gridSize={SCENARIO.gridSize}
-                  caption={`${f.name} (darker = more)`}
-                  fill={(id) =>
-                    mix(FEATURE_LO, to, (SCENARIO.units[id]?.amounts[f.id] ?? 0) / max)
-                  }
-                />
-              );
-            })}
+            {SCENARIO.features.map((f) => (
+              <GridView
+                key={f.id}
+                gridSize={SCENARIO.gridSize}
+                caption={`${f.name} (darker = more)`}
+                fill={featureFill(f.id)}
+              />
+            ))}
           </div>
         </section>
       </div>
