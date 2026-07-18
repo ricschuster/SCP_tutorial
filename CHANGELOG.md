@@ -15,3 +15,11 @@ All notable changes to this project are documented here. The format is based on
   CLAUDE.md and the README. Design docs (project brief, prioritization model
   spec, example scenario, milestones) and ADRs for the stack (TypeScript + React
   + Vite) and the solver (greedy heuristic first, exact ILP later).
+- M0 scaffold: Vite + React + TypeScript app, Vitest with a coverage gate on the
+  engine, ESLint + Prettier, CI running format/lint/typecheck/test/build, and a
+  GitHub Pages deploy workflow. First engine module (constants) with tests.
+- M1 prioritization engine (pure, headless): planning-unit / feature / problem /
+  solution types, feasibility check with named shortfall features, greedy
+  marginal-gain minimum-set solver with deterministic tie-breaking, target
+  attainment and total-cost helpers, and locked-in / locked-out handling.
+  Hand-checked Vitest suite (19 tests).
