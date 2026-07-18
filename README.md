@@ -18,4 +18,4 @@ detailed scope are not yet decided. See `docs/design/00_project_brief.md`.
 
 ## License
 
-TODO: choose and add a license.
+GNU General Public License v3.0. See `LICENSE`.
