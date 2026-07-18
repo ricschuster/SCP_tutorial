@@ -5,6 +5,12 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Node / build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
 # Logs and temp
 *.log
 tmp/
