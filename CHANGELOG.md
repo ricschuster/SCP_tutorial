@@ -37,3 +37,9 @@ All notable changes to this project are documented here. The format is based on
   full planning process (goals, features, targets, prioritize, tradeoff,
   constraints) by narrating and highlighting the relevant panel at each step,
   reachable from a header button. Built to extend to a richer walkthrough later.
+- M5a method knobs (Track 3, greedy-side): the engine `solve` now takes a
+  backward-compatible options object supporting a maximum-coverage-under-budget
+  objective, per-feature weights, and a boundary/compactness penalty (using grid
+  adjacency), alongside the existing minimum-set objective. An advanced "Method"
+  panel wires the objective, budget, compactness, and per-feature weights with
+  live re-solve.
