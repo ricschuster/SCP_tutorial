@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_TARGET_FRACTION } from '../engine/constants.ts';
-import { solve } from '../engine/index.ts';
+import { solve, type Objective, type SolveOptions } from '../engine/index.ts';
 import {
   costRangeOf,
   featureMaxOf,
   makeWorkingUnits,
+  NEIGHBORS,
   SCENARIO,
   toProblemFromUnits,
   type WorkingUnit,
@@ -89,10 +90,27 @@ export function App() {
     costValue: 6,
   });
   const [curveFocus, setCurveFocus] = useState(FIRST_FEATURE);
+  const [objective, setObjective] = useState<Objective>('min-set');
+  const [budgetPct, setBudgetPct] = useState(50);
+  const [boundaryPenalty, setBoundaryPenalty] = useState(0);
+  const [weights, setWeights] = useState<Record<string, number>>(() => {
+    const init: Record<string, number> = {};
+    for (const f of SCENARIO.features) init[f.id] = 1;
+    return init;
+  });
 
+  const totalLandscapeCost = useMemo(
+    () => units.reduce((sum, u) => sum + u.cost, 0),
+    [units],
+  );
+  const budget = Math.round((totalLandscapeCost * budgetPct) / 100);
+  const solveOptions = useMemo<SolveOptions>(
+    () => ({ objective, budget, weights, boundaryPenalty, neighbors: NEIGHBORS }),
+    [objective, budget, weights, boundaryPenalty],
+  );
   const solution = useMemo(
-    () => solve(toProblemFromUnits(units, fractions)),
-    [units, fractions],
+    () => solve(toProblemFromUnits(units, fractions), solveOptions),
+    [units, fractions, solveOptions],
   );
   const selectedSet = useMemo(() => new Set(solution.selected), [solution]);
   const unitsById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
@@ -279,6 +297,73 @@ export function App() {
               </button>
             </div>
           </section>
+
+          <section className="panel controls">
+            <h2>Method (advanced)</h2>
+            <div className="tool-row">
+              <button
+                type="button"
+                className={objective === 'min-set' ? 'tool tool-on' : 'tool'}
+                onClick={() => setObjective('min-set')}
+              >
+                Minimum set
+              </button>
+              <button
+                type="button"
+                className={objective === 'max-coverage' ? 'tool tool-on' : 'tool'}
+                onClick={() => setObjective('max-coverage')}
+              >
+                Max coverage
+              </button>
+            </div>
+
+            {objective === 'max-coverage' && (
+              <label className="control">
+                <span className="control-label">
+                  Budget: {budget} ({budgetPct}% of landscape)
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={budgetPct}
+                  onChange={(e) => setBudgetPct(Number(e.target.value))}
+                />
+              </label>
+            )}
+
+            <label className="control">
+              <span className="control-label">Compactness: {boundaryPenalty}</span>
+              <input
+                type="range"
+                min={0}
+                max={5}
+                step={0.5}
+                value={boundaryPenalty}
+                onChange={(e) => setBoundaryPenalty(Number(e.target.value))}
+              />
+            </label>
+
+            <div className="control">
+              <span className="control-label">Feature weights</span>
+              {SCENARIO.features.map((f) => (
+                <label className="weight-row" key={f.id}>
+                  <span className="swatch" style={{ background: f.color }} />
+                  <input
+                    type="range"
+                    min={0}
+                    max={3}
+                    step={0.5}
+                    value={weights[f.id] ?? 1}
+                    onChange={(e) =>
+                      setWeights((w) => ({ ...w, [f.id]: Number(e.target.value) }))
+                    }
+                  />
+                  <span className="weight-val">{(weights[f.id] ?? 1).toFixed(1)}</span>
+                </label>
+              ))}
+            </div>
+          </section>
         </div>
 
         <section className="results">
@@ -293,6 +378,14 @@ export function App() {
                 {solution.selected.length} / {totalUnits}
               </span>
             </div>
+            {objective === 'max-coverage' && (
+              <div className="stat">
+                <span className="stat-label">Budget used</span>
+                <span className="stat-value">
+                  {solution.totalCost} / {budget}
+                </span>
+              </div>
+            )}
             <div className="attainments">
               {solution.attainment.map((a) => {
                 const pct = a.target > 0 ? Math.min(1, a.represented / a.target) : 1;
@@ -317,9 +410,15 @@ export function App() {
                 );
               })}
             </div>
-            {!solution.feasible && (
+            {objective === 'min-set' && !solution.feasible && (
               <p className="warn">
                 Targets cannot be met (too much locked out or too little habitat):{' '}
+                {solution.shortfallFeatures.map(featureName).join(', ')}.
+              </p>
+            )}
+            {objective === 'max-coverage' && solution.shortfallFeatures.length > 0 && (
+              <p className="info">
+                Not fully covered within budget:{' '}
                 {solution.shortfallFeatures.map(featureName).join(', ')}.
               </p>
             )}

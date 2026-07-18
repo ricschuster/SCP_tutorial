@@ -74,13 +74,24 @@ later extension by adding optional fields to the step type, not a rewrite.
 
 ## M5: Method deep-dive (Track 3)
 
+Split into two shippable halves.
+
+### M5a: method knobs (greedy-side, no new dependency) [done]
+
 - Advanced panel: minimum-set versus maximum-coverage under a budget, a
-  boundary/compactness penalty, and feature weights.
+  boundary/compactness penalty (using grid adjacency), and feature weights.
+- Engine: `solve` takes a backward-compatible options object.
+
+Done when: a learner can switch objectives, set a budget, add a compactness
+penalty, and weight features, and watch the greedy solution respond.
+
+### M5b: exact ILP solver
+
 - Exact ILP solver (glpk.js / WebAssembly) on small instances, presented next to
   greedy for a greedy-versus-optimal comparison.
 
-Done when: a curious learner can switch objectives, add a compactness penalty,
-and compare the greedy solution against the exact optimum.
+Done when: a curious learner can compare the greedy solution against the exact
+optimum on the example landscape.
 
 ## Later / backlog (post-MVP, each needs its own design + ADR)
 

@@ -199,6 +199,22 @@ export function costRangeOf(units: readonly { readonly cost: number }[]): {
   return { min, max };
 }
 
+// Grid adjacency (4-connectivity): unit id -> neighbouring unit ids. Fixed by the
+// grid topology, so it is computed once. Used by the boundary/compactness penalty.
+export const NEIGHBORS: ReadonlyMap<number, readonly number[]> = (() => {
+  const n = SCENARIO.gridSize;
+  const map = new Map<number, readonly number[]>();
+  for (const u of SCENARIO.units) {
+    const nb: number[] = [];
+    if (u.row > 0) nb.push((u.row - 1) * n + u.col);
+    if (u.row < n - 1) nb.push((u.row + 1) * n + u.col);
+    if (u.col > 0) nb.push(u.row * n + (u.col - 1));
+    if (u.col < n - 1) nb.push(u.row * n + (u.col + 1));
+    map.set(u.id, nb);
+  }
+  return map;
+})();
+
 // A fresh editable copy of the starter landscape (all units available).
 export function makeWorkingUnits(): WorkingUnit[] {
   return SCENARIO.units.map((u) => ({
