@@ -43,3 +43,8 @@ All notable changes to this project are documented here. The format is based on
   adjacency), alongside the existing minimum-set objective. An advanced "Method"
   panel wires the objective, budget, compactness, and per-feature weights with
   live re-solve.
+- M5b exact solver (Track 3): an exact minimum-set optimum via a pure-JS MILP
+  solver (javascript-lp-solver), loaded lazily so it stays out of the initial
+  bundle, plus a greedy-versus-exact comparison panel (cost gap and a map of
+  which areas each solution picks). Chosen over glpk.js for testability and a
+  simpler client-side integration; see the updated solver ADR.

@@ -49,5 +49,27 @@ Negative / trade-offs:
   exact solver shows how close greedy gets.
 - Two solvers eventually coexist; the engine must expose a common interface so the
   UI can run either. Designed for in the model doc's "later objectives and knobs".
-- Adding glpk.js later brings a WebAssembly dependency and bounds the exact solver
-  to small instances; both are acceptable given the synthetic, small-grid scope.
+- Adding an exact solver later brings a dependency and bounds it to small
+  instances; both are acceptable given the synthetic, small-grid scope.
+
+## Update (2026-07-18): exact solver library
+
+When M5b landed, the exact solver was implemented with **javascript-lp-solver**
+(a pure-JS mixed-integer programming solver) rather than the glpk.js /
+WebAssembly option named above.
+
+Why the change:
+
+- glpk.js v5 is worker/WebAssembly-oriented; it is awkward to unit-test in the CI
+  environment and adds integration friction under the build tool. It flooded a
+  headless probe with its inlined worker source and did not solve cleanly outside
+  a browser.
+- javascript-lp-solver is pure JavaScript: it runs in the browser, in Node, and in
+  the Vitest test environment, so the exact solver is unit-tested like the rest of
+  the engine. It handles the small binary min-set instances (about 100 variables,
+  a few constraints) instantly.
+- It is still loaded lazily (dynamic import) so it stays out of the initial
+  bundle, matching the original intent.
+
+The decision to offer greedy-first with an exact optimum for comparison is
+unchanged; only the library differs.

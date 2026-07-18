@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_TARGET_FRACTION } from '../engine/constants.ts';
-import { solve, type Objective, type SolveOptions } from '../engine/index.ts';
+import {
+  solve,
+  type Objective,
+  type Solution,
+  type SolveOptions,
+} from '../engine/index.ts';
+import { compareSolutions, type SolutionComparison } from '../engine/compare.ts';
 import {
   costRangeOf,
   featureMaxOf,
@@ -23,6 +29,10 @@ const SELECTED = 'rgb(27 120 55)';
 const UNSELECTED = 'rgb(230 230 230)';
 const LOCK_IN = '#1b7837';
 const LOCK_OUT = '#c0392b';
+const DIFF_BOTH = 'rgb(27 120 55)';
+const DIFF_GREEDY = '#f9a825';
+const DIFF_EXACT = '#1565c0';
+const DIFF_NONE = 'rgb(235 235 235)';
 
 const AMOUNT_MAX = 12;
 const COST_MAX = 15;
@@ -75,6 +85,21 @@ const TOOLS: { id: Tool; label: string }[] = [
   { id: 'clear', label: 'Clear' },
 ];
 
+// Colour each cell by how the greedy and exact solutions differ.
+function diffFill(cmp: SolutionComparison): (unitId: number) => string {
+  const both = new Set(cmp.both);
+  const onlyGreedy = new Set(cmp.onlyGreedy);
+  const onlyExact = new Set(cmp.onlyExact);
+  return (id) =>
+    both.has(id)
+      ? DIFF_BOTH
+      : onlyGreedy.has(id)
+        ? DIFF_GREEDY
+        : onlyExact.has(id)
+          ? DIFF_EXACT
+          : DIFF_NONE;
+}
+
 export function App() {
   const [units, setUnits] = useState<WorkingUnit[]>(() => makeWorkingUnits());
   const [edited, setEdited] = useState(false);
@@ -112,6 +137,24 @@ export function App() {
     () => solve(toProblemFromUnits(units, fractions), solveOptions),
     [units, fractions, solveOptions],
   );
+
+  // Greedy-vs-exact comparison (minimum-set). The exact solver is loaded on
+  // demand so it stays out of the initial bundle. Cleared when inputs change.
+  const [comparison, setComparison] = useState<{
+    exact: Solution;
+    cmp: SolutionComparison;
+  } | null>(null);
+  const [comparing, setComparing] = useState(false);
+
+  const runCompare = async () => {
+    setComparing(true);
+    const problem = toProblemFromUnits(units, fractions);
+    const greedy = solve(problem);
+    const { solveExact } = await import('../engine/exact.ts');
+    const exact = solveExact(problem);
+    setComparison({ exact, cmp: compareSolutions(greedy, exact) });
+    setComparing(false);
+  };
   const selectedSet = useMemo(() => new Set(solution.selected), [solution]);
   const unitsById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
   const costRange = useMemo(() => costRangeOf(units), [units]);
@@ -135,17 +178,21 @@ export function App() {
     setTourStep((s) => (s === null || s + 1 >= TOUR_STEPS.length ? null : s + 1));
   const backStep = () => setTourStep((s) => (s === null ? s : Math.max(0, s - 1)));
 
-  const setFraction = (id: string, pct: number) =>
+  const setFraction = (id: string, pct: number) => {
     setFractions((prev) => ({ ...prev, [id]: pct / 100 }));
+    setComparison(null);
+  };
 
   const paint = (id: number) => {
     setUnits((prev) => prev.map((u) => (u.id === id ? applyBrush(u, brush) : u)));
     setEdited(true);
+    setComparison(null);
   };
 
   const reset = () => {
     setUnits(makeWorkingUnits());
     setEdited(false);
+    setComparison(null);
   };
 
   const costFill = (id: number): string => {
@@ -467,6 +514,57 @@ export function App() {
                 {f.name.replace(' species', '')}
               </button>
             ))}
+          </div>
+
+          <div className="panel compare">
+            <div className="compare-head">
+              <h2>Greedy vs exact optimum</h2>
+              <button
+                type="button"
+                className="tool"
+                onClick={runCompare}
+                disabled={comparing}
+              >
+                {comparing ? 'Solving...' : 'Compute exact optimum'}
+              </button>
+            </div>
+            {comparison === null ? (
+              <p className="hint">
+                Minimum-set only. Compares the greedy heuristic against the exact
+                optimum for the current landscape and targets.
+              </p>
+            ) : comparison.exact.feasible ? (
+              <div className="compare-body">
+                <div className="stats">
+                  <div className="stat">
+                    <span className="stat-label">Greedy cost</span>
+                    <span className="stat-value">{comparison.cmp.greedyCost}</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">Exact cost</span>
+                    <span className="stat-value">{comparison.cmp.exactCost}</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">Gap</span>
+                    <span className="stat-value">
+                      {comparison.cmp.gap} ({comparison.cmp.gapPct.toFixed(1)}%)
+                    </span>
+                  </div>
+                </div>
+                <div className="maps">
+                  <GridView
+                    gridSize={SCENARIO.gridSize}
+                    caption="Both green; greedy-only amber; exact-only blue"
+                    fill={diffFill(comparison.cmp)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="info">
+                The current targets are infeasible, so there is no exact optimum to
+                compare.
+              </p>
+            )}
           </div>
 
           <div
