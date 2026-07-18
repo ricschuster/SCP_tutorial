@@ -1,0 +1,81 @@
+# 03 Milestones
+
+Phased plan. Each milestone should end with something runnable and, where there
+is logic, tested. Open GitHub issues will be the live task tracker; this doc is
+the shape of the plan. The guiding architecture is one shared prioritization
+engine with three depth layers over it (see the project brief).
+
+## M0: Scaffold
+
+- Vite + React + TypeScript project, strict mode.
+- Vitest for unit tests, one trivial passing test.
+- ESLint + Prettier + typecheck wired into a CI workflow.
+- GitHub Pages deploy workflow (build on push to `main`, publish `dist/`).
+- Add the stack-specific harness files deferred earlier: `package.json`,
+  `tsconfig.json`, Vite/ESLint/Prettier config, `.nvmrc`, CI and deploy
+  workflows, and Dependabot.
+- Repo structure per CLAUDE.md (`src/engine`, `src/data`, `src/ui`).
+
+Done when: the empty app builds, deploys to Pages, and the test runner passes.
+
+## M1: Prioritization engine (pure, headless)
+
+- Types: planning unit (cost, status), feature (per-unit amount, target),
+  problem, solution.
+- Feasibility check with named shortfall features.
+- Greedy marginal-gain minimum-set solver (deterministic tie-breaking).
+- Target attainment and total cost computation.
+- Locked-in and locked-out handling.
+- Full unit test suite for the model doc's "testable units".
+
+Done when: given a synthetic landscape and targets, the engine returns a correct
+greedy selection, cost, and attainment, verified against hand-checked cases.
+
+## M2: Core loop, visualized (Track 1 MVP)
+
+- Render the planning-unit grid (custom canvas/SVG), the cost surface, and the
+  per-feature amount layers.
+- Target controls per feature and a Solve action.
+- Priority map (selected units), total cost, and per-feature attainment readout.
+- The starter example scenario authored as data.
+
+Done when: a learner can set targets, solve, and see the priority map, cost, and
+attainment on the example landscape.
+
+## M3: Interaction and intuition
+
+- Edit costs and toggle locked-in / locked-out units, with live re-solve.
+- Reset / revert.
+- Complementarity cue (show why multi-feature units are chosen).
+- A short cost-versus-target view (how cost moves as a target changes).
+
+Done when: a learner can change targets, costs, and constraints and watch the
+solution adapt, and can see the cost-versus-target tradeoff.
+
+## M4: Full SCP process (Track 2)
+
+- A guided journey wrapping the core: set goals, assemble data, choose targets,
+  prioritize, evaluate and implement (lock-in existing areas, lock-out no-go
+  areas, sense-check the result).
+- Short explanatory text at each stage.
+
+Done when: a newcomer can walk the whole process end to end on the example and
+understand where prioritization sits within it.
+
+## M5: Method deep-dive (Track 3)
+
+- Advanced panel: minimum-set versus maximum-coverage under a budget, a
+  boundary/compactness penalty, and feature weights.
+- Exact ILP solver (glpk.js / WebAssembly) on small instances, presented next to
+  greedy for a greedy-versus-optimal comparison.
+
+Done when: a curious learner can switch objectives, add a compactness penalty,
+and compare the greedy solution against the exact optimum.
+
+## Later / backlog (post-MVP, each needs its own design + ADR)
+
+- Irreplaceability / selection-frequency display.
+- Connectivity beyond the boundary penalty.
+- Real spatial / feature data ingestion (crosswalk, resampling to the grid).
+- Scale the grid and feature count (performance pass; canvas rendering).
+- Save / share a scenario (URL-encoded state).
