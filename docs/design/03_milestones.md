@@ -103,4 +103,14 @@ ADR update for why.
 - Connectivity beyond the boundary penalty.
 - Real spatial / feature data ingestion (crosswalk, resampling to the grid).
 - Scale the grid and feature count (performance pass; canvas rendering).
-- Save / share a scenario (URL-encoded state).
+- Save / share a scenario (URL-encoded state). [done]
+
+### Save / share a scenario [done]
+
+The full working state (edited unit amounts, costs, and lock status, per-feature
+targets, and method options) is serialized to a versioned, URL-safe token in the
+location hash, so a scenario can be bookmarked or shared with a "Copy link"
+button and restored on load. Unit edits are stored as a diff against the base
+landscape, so the token stays compact; a default scenario yields a clean URL.
+Malformed or unknown-version tokens fall back to the default scenario. The
+codec is a pure, unit-tested module (`src/data/share.ts`); no ADR was needed.

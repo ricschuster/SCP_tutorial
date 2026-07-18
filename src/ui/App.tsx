@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DEFAULT_TARGET_FRACTION } from '../engine/constants.ts';
 import {
   solve,
   type Objective,
@@ -16,6 +15,14 @@ import {
   toProblemFromUnits,
   type WorkingUnit,
 } from '../data/scenario.ts';
+import {
+  decodeState,
+  defaultState,
+  encodeState,
+  hasUnitEdits,
+  isDefaultState,
+  type ScenarioState,
+} from '../data/share.ts';
 import { GridView } from './GridView.tsx';
 import { CostTargetCurve } from './CostTargetCurve.tsx';
 import { TourPanel } from './TourPanel.tsx';
@@ -101,13 +108,19 @@ function diffFill(cmp: SolutionComparison): (unitId: number) => string {
 }
 
 export function App() {
-  const [units, setUnits] = useState<WorkingUnit[]>(() => makeWorkingUnits());
-  const [edited, setEdited] = useState(false);
-  const [fractions, setFractions] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {};
-    for (const f of SCENARIO.features) init[f.id] = DEFAULT_TARGET_FRACTION;
-    return init;
+  // Hydrate from a shared link if the URL carries one, else the default
+  // scenario. Read once on mount so the whole state starts from one snapshot.
+  const [initial] = useState<ScenarioState>(() => {
+    const fromUrl =
+      typeof window !== 'undefined' ? decodeState(window.location.hash.slice(1)) : null;
+    return fromUrl ?? defaultState();
   });
+
+  const [units, setUnits] = useState<WorkingUnit[]>(() => initial.units);
+  const [edited, setEdited] = useState(() => hasUnitEdits(initial.units));
+  const [fractions, setFractions] = useState<Record<string, number>>(
+    () => initial.fractions,
+  );
   const [brush, setBrush] = useState<Brush>({
     tool: 'amount',
     featureId: FIRST_FEATURE,
@@ -115,14 +128,12 @@ export function App() {
     costValue: 6,
   });
   const [curveFocus, setCurveFocus] = useState(FIRST_FEATURE);
-  const [objective, setObjective] = useState<Objective>('min-set');
-  const [budgetPct, setBudgetPct] = useState(50);
-  const [boundaryPenalty, setBoundaryPenalty] = useState(0);
-  const [weights, setWeights] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {};
-    for (const f of SCENARIO.features) init[f.id] = 1;
-    return init;
-  });
+  const [objective, setObjective] = useState<Objective>(() => initial.objective);
+  const [budgetPct, setBudgetPct] = useState(() => initial.budgetPct);
+  const [boundaryPenalty, setBoundaryPenalty] = useState(() => initial.boundaryPenalty);
+  const [weights, setWeights] = useState<Record<string, number>>(() => initial.weights);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const totalLandscapeCost = useMemo(
     () => units.reduce((sum, u) => sum + u.cost, 0),
@@ -171,6 +182,42 @@ export function App() {
     const el = rootRef.current?.querySelector(`[data-region="${currentStep.region}"]`);
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [currentStep]);
+
+  // Keep the URL in sync with the shareable state, so the current scenario can
+  // be bookmarked or copied. A default scenario yields a clean URL (no hash).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const state: ScenarioState = {
+      fractions,
+      weights,
+      objective,
+      budgetPct,
+      boundaryPenalty,
+      units,
+    };
+    const base = `${window.location.pathname}${window.location.search}`;
+    const url = isDefaultState(state) ? base : `${base}#${encodeState(state)}`;
+    window.history.replaceState(null, '', url);
+  }, [fractions, weights, objective, budgetPct, boundaryPenalty, units]);
+
+  // Clear the pending "Link copied" timer if the app unmounts mid-feedback.
+  useEffect(
+    () => () => {
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+    } catch {
+      return;
+    }
+    setCopied(true);
+    if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 1500);
+  };
 
   const tourHi = (key: TourRegion) =>
     currentStep?.region === key ? ' tour-highlight' : '';
@@ -240,9 +287,19 @@ export function App() {
             change things.
           </p>
         </div>
-        <button type="button" className="tour-start" onClick={() => setTourStep(0)}>
-          Guided tour
-        </button>
+        <div className="title-actions">
+          <button
+            type="button"
+            className="tour-start secondary"
+            onClick={copyLink}
+            title="Copy a link to the current scenario"
+          >
+            {copied ? 'Link copied' : 'Copy link'}
+          </button>
+          <button type="button" className="tour-start" onClick={() => setTourStep(0)}>
+            Guided tour
+          </button>
+        </div>
       </div>
 
       <div className="layout">

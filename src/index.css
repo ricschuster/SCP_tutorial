@@ -55,6 +55,12 @@ body {
   gap: 0.75rem 1rem;
 }
 
+.title-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .tour-start {
   padding: 0.45rem 0.9rem;
   font-size: 0.9rem;
@@ -68,6 +74,15 @@ body {
 
 .tour-start:hover {
   background: #155e2b;
+}
+
+.tour-start.secondary {
+  color: #1b7837;
+  background: #fff;
+}
+
+.tour-start.secondary:hover {
+  background: #eef6ef;
 }
 
 .app.tour-active {
