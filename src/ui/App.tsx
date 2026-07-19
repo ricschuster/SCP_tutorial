@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  irreplaceability,
   solve,
   type Objective,
   type Solution,
@@ -42,6 +43,10 @@ import { hexToRgb, mix, type Rgb } from './color.ts';
 const FEATURE_LO: Rgb = [245, 245, 245];
 const COST_LO: Rgb = [235, 237, 232];
 const COST_HI: Rgb = [60, 60, 60];
+// Irreplaceability heat: a light-to-warm sequential ramp (ColorBrewer OrRd),
+// deliberately distinct from the selected green, lock violet, and diff blue.
+const IRREP_LO: Rgb = [255, 247, 236];
+const IRREP_HI: Rgb = [179, 0, 0];
 const SELECTED = 'rgb(27 120 55)';
 const UNSELECTED = 'rgb(230 230 230)';
 // Lock-in is violet, deliberately distinct from the selected-priority green it
@@ -153,6 +158,7 @@ export function App() {
     cover: FIRST_COVER,
   });
   const [inspected, setInspected] = useState<number | null>(null);
+  const [showIrrep, setShowIrrep] = useState(false);
   const [view, setView] = useState<AppView>(() => initial.view);
   const [curveFocus, setCurveFocus] = useState(FIRST_FEATURE);
   const [objective, setObjective] = useState<Objective>(() => initial.objective);
@@ -194,6 +200,18 @@ export function App() {
     setComparing(false);
   };
   const selectedSet = useMemo(() => new Set(solution.selected), [solution]);
+
+  // Irreplaceability heat: how often each unit appears across a portfolio of
+  // cost-perturbed near-optimal plans. Computed only while the layer is on (it
+  // runs many solves), and with the current solve options so the heat matches
+  // the objective the learner is looking at.
+  const irrep = useMemo(
+    () =>
+      showIrrep
+        ? irreplaceability(toProblemFromUnits(units, fractions), { solveOptions })
+        : null,
+    [showIrrep, units, fractions, solveOptions],
+  );
   const unitsById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
   const inspectedUnit = inspected === null ? null : (unitsById.get(inspected) ?? null);
   const inspectedExplain = inspectedUnit
@@ -325,6 +343,9 @@ export function App() {
     return null;
   };
 
+  const irrepFill = (id: number): string =>
+    mix(IRREP_LO, IRREP_HI, irrep?.frequency.get(id) ?? 0);
+
   const editCaption =
     brush.tool === 'cover'
       ? `Edit: paint ${coverName(brush.cover)}`
@@ -363,6 +384,51 @@ export function App() {
         </li>
       ))}
     </ul>
+  );
+
+  // Irreplaceability layer: a toggle, the heat map, and its scale legend. Shared
+  // by both tabs' priority sections (only one renders at a time).
+  const irrepToggle = (
+    <label className="irrep-toggle">
+      <input
+        type="checkbox"
+        checked={showIrrep}
+        onChange={(e) => setShowIrrep(e.target.checked)}
+      />
+      Show irreplaceability
+    </label>
+  );
+
+  const irrepMap = irrep && (
+    <GridView
+      gridSize={SCENARIO.gridSize}
+      caption="Irreplaceability (how often selected)"
+      fill={irrepFill}
+      border={statusBorder}
+      onInspect={setInspected}
+      inspectedId={inspected}
+    />
+  );
+
+  const irrepLegend = irrep && (
+    <div className="irrep-scale">
+      {irrep.runs === 0 ? (
+        <p className="hint">
+          No feasible plan for the current targets, so nothing to rank.
+        </p>
+      ) : (
+        <>
+          <span className="hint">Interchangeable</span>
+          <span
+            className="irrep-bar"
+            style={{
+              background: `linear-gradient(to right, ${mix(IRREP_LO, IRREP_HI, 0)}, ${mix(IRREP_LO, IRREP_HI, 1)})`,
+            }}
+          />
+          <span className="hint">Irreplaceable</span>
+        </>
+      )}
+    </div>
   );
 
   return (
@@ -624,7 +690,10 @@ export function App() {
                   className={`editor-map${tourHi('priority')}`}
                   data-region="priority"
                 >
-                  <h2>Priority areas</h2>
+                  <div className="editor-map-head">
+                    <h2>Priority areas</h2>
+                    {irrepToggle}
+                  </div>
                   <div className="maps">
                     {priorityMap}
                     <GridView
@@ -636,7 +705,9 @@ export function App() {
                       onInspect={setInspected}
                       inspectedId={inspected}
                     />
+                    {irrepMap}
                   </div>
+                  {irrepLegend}
                   {locksLegend}
                   <ul className="legend">
                     {COVERS.map((c) => (
@@ -687,8 +758,15 @@ export function App() {
           {view === 'method' && (
             <div className="editor-row">
               <div className="editor-map">
-                <h2>Priority areas</h2>
-                <div className="maps">{priorityMap}</div>
+                <div className="editor-map-head">
+                  <h2>Priority areas</h2>
+                  {irrepToggle}
+                </div>
+                <div className="maps">
+                  {priorityMap}
+                  {irrepMap}
+                </div>
+                {irrepLegend}
                 {locksLegend}
               </div>
               <div className={`curve-wrap${tourHi('curve')}`} data-region="curve">
