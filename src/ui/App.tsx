@@ -429,6 +429,56 @@ export function App() {
     setComparison(null);
   };
 
+  // Full reset: revert every knob to its default, as if freshly loaded with no
+  // share hash. Unlike "Reset landscape" (units only), this also clears targets,
+  // objective/budget/weights, penalties, the spotlight/irreplaceability layer,
+  // the inspector, the active tab, and the URL hash. Confirm first when there is
+  // work to lose so an accidental click does not wipe a lot of changes.
+  const startOver = () => {
+    const current: ScenarioState = {
+      fractions,
+      weights,
+      objective,
+      budgetPct,
+      boundaryPenalty,
+      connectivityPenalty,
+      sameCover,
+      view,
+      units,
+    };
+    const clean = isDefaultState(current) && !showIrrep && inspected === null;
+    if (!clean && typeof window !== 'undefined') {
+      const ok = window.confirm(
+        'Start over? This clears every change and returns to the default scenario.',
+      );
+      if (!ok) return;
+    }
+    const d = defaultState();
+    setUnits(d.units);
+    setEdited(false);
+    setFractions(d.fractions);
+    setWeights(d.weights);
+    setObjective(d.objective);
+    setBudgetPct(d.budgetPct);
+    setBoundaryPenalty(d.boundaryPenalty);
+    setConnectivityPenalty(d.connectivityPenalty);
+    setSameCover(d.sameCover);
+    setView(d.view);
+    setSpotlight(FIRST_FEATURE);
+    setCurveFocus(FIRST_FEATURE);
+    setShowIrrep(false);
+    setInspected(null);
+    setBrush({ tool: 'cover', cover: FIRST_COVER });
+    setComparison(null);
+    // Drop any shared-scenario hash so a stale link does not re-apply. The URL
+    // sync effect would also clear it once state is default, but do it here too
+    // so the intent is explicit.
+    if (typeof window !== 'undefined') {
+      const base = `${window.location.pathname}${window.location.search}`;
+      window.history.replaceState(null, '', base);
+    }
+  };
+
   // The compare panel is objective-specific now, so changing the objective, the
   // budget, or a weight invalidates any shown comparison.
   const changeObjective = (next: Objective) => {
@@ -577,6 +627,14 @@ export function App() {
           </p>
         </div>
         <div className="title-actions">
+          <button
+            type="button"
+            className="tour-start secondary"
+            onClick={startOver}
+            title="Clear every change and return to the default scenario"
+          >
+            Start over
+          </button>
           <button
             type="button"
             className="tour-start secondary"
