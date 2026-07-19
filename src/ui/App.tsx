@@ -16,7 +16,14 @@ import {
   toProblemFromUnits,
   type WorkingUnit,
 } from '../data/scenario.ts';
-import { COVERS, type CoverId } from '../data/land-cover.ts';
+import {
+  baseCostOf,
+  COVERS,
+  explainCover,
+  SPECIES_PEAK,
+  SUITABILITY,
+  type CoverId,
+} from '../data/land-cover.ts';
 import {
   decodeState,
   defaultState,
@@ -144,6 +151,7 @@ export function App() {
     tool: 'cover',
     cover: FIRST_COVER,
   });
+  const [inspected, setInspected] = useState<number | null>(null);
   const [curveFocus, setCurveFocus] = useState(FIRST_FEATURE);
   const [objective, setObjective] = useState<Objective>(() => initial.objective);
   const [budgetPct, setBudgetPct] = useState(() => initial.budgetPct);
@@ -185,6 +193,10 @@ export function App() {
   };
   const selectedSet = useMemo(() => new Set(solution.selected), [solution]);
   const unitsById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
+  const inspectedUnit = inspected === null ? null : (unitsById.get(inspected) ?? null);
+  const inspectedExplain = inspectedUnit
+    ? explainCover(inspectedUnit.cover, inspectedUnit.quality, inspectedUnit.costVar)
+    : null;
   const costRange = useMemo(() => costRangeOf(units), [units]);
   const totalUnits = units.length;
 
@@ -527,6 +539,8 @@ export function App() {
                   fill={(id) => (selectedSet.has(id) ? SELECTED : UNSELECTED)}
                   selected={selectedSet}
                   border={statusBorder}
+                  onInspect={setInspected}
+                  inspectedId={inspected}
                 />
                 <GridView
                   gridSize={SCENARIO.gridSize}
@@ -534,6 +548,8 @@ export function App() {
                   fill={coverFill}
                   border={statusBorder}
                   onPaint={paint}
+                  onInspect={setInspected}
+                  inspectedId={inspected}
                 />
               </div>
               <ul className="legend">
@@ -653,6 +669,8 @@ export function App() {
                 gridSize={SCENARIO.gridSize}
                 caption="Cost to protect (darker = pricier)"
                 fill={costFill}
+                onInspect={setInspected}
+                inspectedId={inspected}
               />
               {SCENARIO.features.map((f) => (
                 <GridView
@@ -660,8 +678,113 @@ export function App() {
                   gridSize={SCENARIO.gridSize}
                   caption={`${f.name} habitat (darker = more)`}
                   fill={featureFill(f.id)}
+                  onInspect={setInspected}
+                  inspectedId={inspected}
                 />
               ))}
+            </div>
+          </div>
+
+          {inspectedUnit && inspectedExplain && (
+            <div className="panel inspector">
+              <div className="inspector-head">
+                <h2>
+                  Cell ({inspectedUnit.row}, {inspectedUnit.col})
+                  <span
+                    className="swatch"
+                    style={{ background: coverColor(inspectedUnit.cover) }}
+                  />
+                  {coverName(inspectedUnit.cover)}
+                </h2>
+                <button
+                  type="button"
+                  className="tool"
+                  onClick={() => setInspected(null)}
+                >
+                  Close
+                </button>
+              </div>
+              <p className="hint">
+                Habitat quality here: {inspectedExplain.quality.toFixed(2)} (forest is
+                not equally good forest everywhere).
+              </p>
+              <table className="inspect-table">
+                <tbody>
+                  {inspectedExplain.species.map((s) => {
+                    const raw =
+                      Math.round(
+                        s.suit * inspectedExplain.quality * SPECIES_PEAK * 10,
+                      ) / 10;
+                    return (
+                      <tr key={s.id}>
+                        <th>{featureName(s.id)}</th>
+                        <td className="calc">
+                          suit {s.suit.toFixed(2)} x quality{' '}
+                          {inspectedExplain.quality.toFixed(2)} x {SPECIES_PEAK} ={' '}
+                          {raw.toFixed(1)}
+                          {s.amount === 0 && raw > 0 ? ' (below floor, so 0)' : ''}
+                        </td>
+                        <td className="calc-out">{s.amount.toFixed(1)}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr>
+                    <th>Cost</th>
+                    <td className="calc">
+                      base({coverName(inspectedUnit.cover)}){' '}
+                      {inspectedExplain.cost.base} x (1 +{' '}
+                      {inspectedExplain.cost.costVar.toFixed(2)})
+                    </td>
+                    <td className="calc-out">{inspectedExplain.cost.value}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="feature-section">
+            <h2>The rules (advanced)</h2>
+            <p className="hint">
+              How every cell&apos;s numbers are computed. Habitat = suitability x
+              habitat quality x {SPECIES_PEAK}; cost is the cover base cost, nudged by
+              local variation.
+            </p>
+            <div className="rules-wrap">
+              <table className="rules">
+                <caption>Suitability (species x cover)</caption>
+                <thead>
+                  <tr>
+                    <th />
+                    {COVERS.map((c) => (
+                      <th key={c.id}>
+                        <span className="swatch" style={{ background: c.color }} />
+                        {c.name}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {SCENARIO.features.map((f) => (
+                    <tr key={f.id}>
+                      <th>{featureName(f.id)}</th>
+                      {COVERS.map((c) => {
+                        const v = SUITABILITY[f.id]?.[c.id] ?? 0;
+                        return (
+                          <td key={c.id} className={v === 0 ? 'zero' : undefined}>
+                            {v.toFixed(2)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                  <tr>
+                    <th>Base cost</th>
+                    {COVERS.map((c) => (
+                      <td key={c.id}>{baseCostOf(c.id)}</td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </section>
