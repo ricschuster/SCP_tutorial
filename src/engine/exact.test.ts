@@ -15,7 +15,7 @@ function feature(id: string, target: number): Feature {
   return { id, name: id, target };
 }
 
-test('exact finds a cheaper optimum than greedy when greedy is suboptimal', () => {
+test('exact finds a cheaper optimum than greedy when greedy is suboptimal', async () => {
   // Greedy takes two cost-3 units (total 6); the exact optimum is the single
   // cost-5 unit that alone meets the target.
   const problem: Problem = {
@@ -23,7 +23,7 @@ test('exact finds a cheaper optimum than greedy when greedy is suboptimal', () =
     features: [feature('A', 10)],
   };
   const greedy = solve(problem);
-  const exact = solveExact(problem);
+  const exact = await solveExact(problem);
 
   expect(greedy.totalCost).toBe(6);
   expect(exact.feasible).toBe(true);
@@ -32,7 +32,7 @@ test('exact finds a cheaper optimum than greedy when greedy is suboptimal', () =
   expect(exact.attainment.every((a) => a.met)).toBe(true);
 });
 
-test('exact respects locked-in and locked-out status', () => {
+test('exact respects locked-in and locked-out status', async () => {
   const problem: Problem = {
     units: [
       unit(0, 100, { A: 3 }, 'locked-in'),
@@ -41,19 +41,19 @@ test('exact respects locked-in and locked-out status', () => {
     ],
     features: [feature('A', 5)],
   };
-  const exact = solveExact(problem);
+  const exact = await solveExact(problem);
   expect(exact.feasible).toBe(true);
   expect(exact.selected).toContain(0); // locked-in always selected
   expect(exact.selected).not.toContain(2); // locked-out never selected
   expect(exact.attainment[0]?.met).toBe(true);
 });
 
-test('exact reports infeasible when targets cannot be met', () => {
+test('exact reports infeasible when targets cannot be met', async () => {
   const problem: Problem = {
     units: [unit(0, 1, { A: 5 })],
     features: [feature('A', 10)],
   };
-  const exact = solveExact(problem);
+  const exact = await solveExact(problem);
   expect(exact.feasible).toBe(false);
   expect(exact.selected).toEqual([]);
   expect(exact.shortfallFeatures).toEqual(['A']);

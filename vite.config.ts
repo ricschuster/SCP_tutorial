@@ -11,6 +11,10 @@ export default defineConfig(({ command }) => ({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
+    // The exact solver imports the default `glpk.js` (browser worker) build.
+    // Under Vitest there is no browser worker, so use the synchronous Node build
+    // instead; both expose the same factory and model shape.
+    alias: { 'glpk.js': 'glpk.js/node' },
     coverage: {
       provider: 'v8',
       // The pure prioritization engine is where correctness lives; hold it to a

@@ -73,3 +73,13 @@ Why the change:
 
 The decision to offer greedy-first with an exact optimum for comparison is
 unchanged; only the library differs.
+
+## Update (2026-07-18): exact solver superseded by glpk.js
+
+Preparing for the 30x30 landscape, javascript-lp-solver was found to stall at
+~900 binaries. A benchmark of glpk.js, HiGHS (`highs-js`), and javascript-lp-solver
+led to adopting **glpk.js** (its synchronous Node build for tests, its worker build
+in the browser). The earlier CI-test problem was the worker build run outside a
+browser; the `glpk.js/node` build tests cleanly. See
+`2026-07-18_exact-solver-revisit-for-scale.md` for the decision and numbers. The
+greedy-first-with-exact-comparison design is still unchanged.
