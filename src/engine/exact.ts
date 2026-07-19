@@ -23,6 +23,12 @@ import type { Problem, Solution } from './types.ts';
 // Stop once the incumbent is provably within 1% of optimal. Keeps the solve fast
 // across the whole target range; the UI labels the result "near-optimal".
 const MIP_REL_GAP = 0.01;
+// Max-coverage solves to the true optimum (no gap): it is cheap here (~0.1-0.2s
+// across budgets), and a gap could make the "optimum" come back below greedy at
+// generous budgets, where greedy already reaches the ceiling. A negative gap
+// would read as "the optimum is worse", so max-coverage pays the small cost of
+// being exact.
+const MAX_COVERAGE_GAP = 0;
 // Safety cap: a pathological instance degrades to the incumbent instead of
 // hanging. Real solves finish far inside this at the 1% gap.
 const TIME_LIMIT_SEC = 10;
@@ -101,6 +107,123 @@ function buildMinSetLp(problem: Problem): string {
     ` cost: ${objectiveTerms.join(' + ')}`,
     'Subject To',
     ...constraints,
+    'Binary',
+    ` ${binaries.join(' ')}`,
+    'End',
+  ].join('\n');
+}
+
+// Near-optimal max-coverage solution: the set that represents the most of the
+// targets (capped at each target, weighted) that fits within a cost budget. Like
+// the greedy max-coverage solve, locked-in units are always included and their
+// cost counts against the budget, so only the remaining budget is discretionary;
+// there is no infeasibility (an empty plan is always allowed). Compare against the
+// greedy max-coverage heuristic. Ignores the penalties, exactly like the min-set
+// solve.
+export async function solveExactMaxCoverage(
+  problem: Problem,
+  options: {
+    budget: number;
+    weights?: Readonly<Record<string, number>>;
+    mipRelGap?: number;
+  },
+): Promise<Solution> {
+  const lp = buildMaxCoverageLp(problem, options.budget, options.weights);
+  const result = await runHighs(lp, {
+    mipRelGap: options.mipRelGap ?? MAX_COVERAGE_GAP,
+    timeLimitSec: TIME_LIMIT_SEC,
+  });
+
+  const selected: number[] = [];
+  for (const unit of problem.units) {
+    if (unit.status === 'locked-out') continue;
+    const value = result.columns[`u${unit.id}`];
+    if (typeof value === 'number' && value > 0.5) selected.push(unit.id);
+  }
+
+  const attainment = attainmentFor(problem, selected);
+  return {
+    feasible: true,
+    selected,
+    totalCost: totalCost(problem, selected),
+    attainment,
+    shortfallFeatures: attainment.filter((a) => !a.met).map((a) => a.featureId),
+  };
+}
+
+// Build the max-coverage MILP as a CPLEX-LP string for HiGHS:
+//
+//   maximise  sum_f w_f * r_f
+//   s.t.      r_f <= sum_i a_if x_i        (represented feature amount, capped ...)
+//             0 <= r_f <= target_f         (... at the target: no credit past it)
+//             sum_{i available} c_i x_i <= budget - lockedInCost
+//             x_i in {0,1}; locked-in x_i = 1; locked-out omitted
+//
+// Locked-in units are forced in and count toward representation; their cost is
+// spent up front, so only the leftover budget bounds the discretionary units,
+// matching the greedy max-coverage rule. Pure and deterministic.
+function buildMaxCoverageLp(
+  problem: Problem,
+  budget: number,
+  weights?: Readonly<Record<string, number>>,
+): string {
+  const binaries: string[] = [];
+  const lockedIn: string[] = [];
+  const budgetTerms: string[] = []; // discretionary (available) units only
+  const featureUnitTerms = new Map<string, string[]>();
+  for (const feature of problem.features) featureUnitTerms.set(feature.id, []);
+  let lockedInCost = 0;
+
+  for (const unit of problem.units) {
+    if (unit.status === 'locked-out') continue; // never selectable
+    const name = `u${unit.id}`;
+    binaries.push(name);
+    if (unit.status === 'locked-in') {
+      lockedIn.push(name);
+      lockedInCost += unit.cost;
+    } else {
+      budgetTerms.push(term(unit.cost, name));
+    }
+    for (const feature of problem.features) {
+      const amount = amountInUnit(unit, feature.id);
+      if (amount !== 0) featureUnitTerms.get(feature.id)?.push(term(amount, name));
+    }
+  }
+
+  const objectiveTerms: string[] = [];
+  const constraints: string[] = [];
+  const bounds: string[] = [];
+  for (const feature of problem.features) {
+    const rName = `r_${feature.id}`;
+    objectiveTerms.push(term(weights?.[feature.id] ?? 1, rName));
+    // r_f - sum a_if x_i <= 0
+    const subtracted = (featureUnitTerms.get(feature.id) ?? [])
+      .map((t) => `- ${t}`)
+      .join(' ');
+    constraints.push(
+      `  cap_${feature.id}: ${rName}${subtracted ? ` ${subtracted}` : ''} <= 0`,
+    );
+    // Lower bound 0 is the LP default; cap the credit at the target.
+    bounds.push(` ${rName} <= ${feature.target}`);
+  }
+  // Discretionary budget after locked-in spend. Skip the row when nothing is
+  // discretionary, since an LP constraint needs at least one variable.
+  if (budgetTerms.length > 0) {
+    constraints.push(
+      `  budget: ${budgetTerms.join(' + ')} <= ${Math.max(0, budget - lockedInCost)}`,
+    );
+  }
+  for (const name of lockedIn) {
+    constraints.push(`  lock_${name}: ${name} = 1`);
+  }
+
+  return [
+    'Maximize',
+    ` rep: ${objectiveTerms.join(' + ')}`,
+    'Subject To',
+    ...constraints,
+    'Bounds',
+    ...bounds,
     'Binary',
     ` ${binaries.join(' ')}`,
     'End',

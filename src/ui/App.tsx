@@ -6,7 +6,13 @@ import {
   type Solution,
   type SolveOptions,
 } from '../engine/index.ts';
-import { compareSolutions, type SolutionComparison } from '../engine/compare.ts';
+import {
+  compareSolutions,
+  compareCoverage,
+  type SelectionDiff,
+  type SolutionComparison,
+  type CoverageComparison,
+} from '../engine/compare.ts';
 import {
   applyCover,
   combinedHabitatMaxOf,
@@ -130,8 +136,14 @@ const TOOLS: { id: Tool; label: string }[] = [
   { id: 'clear', label: 'Clear' },
 ];
 
+// Coverage as a percentage of the achievable ceiling, e.g. "88.2%".
+function coveragePctLabel(value: number, max: number): string {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  return `${pct.toFixed(1)}%`;
+}
+
 // Colour each cell by how the greedy and exact solutions differ.
-function diffFill(cmp: SolutionComparison): (unitId: number) => string {
+function diffFill(cmp: SelectionDiff): (unitId: number) => string {
   const both = new Set(cmp.both);
   const onlyGreedy = new Set(cmp.onlyGreedy);
   const onlyExact = new Set(cmp.onlyExact);
@@ -209,21 +221,35 @@ export function App() {
     [units, fractions, solveOptions],
   );
 
-  // Greedy-vs-exact comparison (minimum-set). The exact solver is loaded on
-  // demand so it stays out of the initial bundle. Cleared when inputs change.
-  const [comparison, setComparison] = useState<{
-    exact: Solution;
-    cmp: SolutionComparison;
-  } | null>(null);
+  // Greedy-vs-near-optimal comparison for the current objective. The exact solver
+  // is loaded on demand so it stays out of the initial bundle. Cleared when any
+  // input that defines the compared problem changes. Both sides drop the greedy
+  // penalties so the only difference measured is heuristic vs optimum.
+  const [comparison, setComparison] = useState<
+    | { kind: 'min-set'; exact: Solution; cmp: SolutionComparison }
+    | { kind: 'max-coverage'; exact: Solution; cmp: CoverageComparison }
+    | null
+  >(null);
   const [comparing, setComparing] = useState(false);
 
   const runCompare = async () => {
     setComparing(true);
     const problem = toProblemFromUnits(units, fractions);
-    const greedy = solve(problem);
-    const { solveExact } = await import('../engine/exact.ts');
-    const exact = await solveExact(problem);
-    setComparison({ exact, cmp: compareSolutions(greedy, exact) });
+    if (objective === 'max-coverage') {
+      const greedy = solve(problem, { objective: 'max-coverage', budget, weights });
+      const { solveExactMaxCoverage } = await import('../engine/exact.ts');
+      const exact = await solveExactMaxCoverage(problem, { budget, weights });
+      setComparison({
+        kind: 'max-coverage',
+        exact,
+        cmp: compareCoverage(greedy, exact, weights),
+      });
+    } else {
+      const greedy = solve(problem);
+      const { solveExact } = await import('../engine/exact.ts');
+      const exact = await solveExact(problem);
+      setComparison({ kind: 'min-set', exact, cmp: compareSolutions(greedy, exact) });
+    }
     setComparing(false);
   };
   const selectedSet = useMemo(() => new Set(solution.selected), [solution]);
@@ -400,6 +426,21 @@ export function App() {
   const reset = () => {
     setUnits(makeWorkingUnits());
     setEdited(false);
+    setComparison(null);
+  };
+
+  // The compare panel is objective-specific now, so changing the objective, the
+  // budget, or a weight invalidates any shown comparison.
+  const changeObjective = (next: Objective) => {
+    setObjective(next);
+    setComparison(null);
+  };
+  const changeBudgetPct = (pct: number) => {
+    setBudgetPct(pct);
+    setComparison(null);
+  };
+  const changeWeight = (id: string, value: number) => {
+    setWeights((prev) => ({ ...prev, [id]: value }));
     setComparison(null);
   };
 
@@ -653,14 +694,14 @@ export function App() {
                 <button
                   type="button"
                   className={objective === 'min-set' ? 'tool tool-on' : 'tool'}
-                  onClick={() => setObjective('min-set')}
+                  onClick={() => changeObjective('min-set')}
                 >
                   Minimum set
                 </button>
                 <button
                   type="button"
                   className={objective === 'max-coverage' ? 'tool tool-on' : 'tool'}
-                  onClick={() => setObjective('max-coverage')}
+                  onClick={() => changeObjective('max-coverage')}
                 >
                   Max coverage
                 </button>
@@ -676,7 +717,7 @@ export function App() {
                     min={0}
                     max={100}
                     value={budgetPct}
-                    onChange={(e) => setBudgetPct(Number(e.target.value))}
+                    onChange={(e) => changeBudgetPct(Number(e.target.value))}
                   />
                 </label>
               )}
@@ -737,9 +778,7 @@ export function App() {
                       max={3}
                       step={0.5}
                       value={weights[f.id] ?? 1}
-                      onChange={(e) =>
-                        setWeights((w) => ({ ...w, [f.id]: Number(e.target.value) }))
-                      }
+                      onChange={(e) => changeWeight(f.id, Number(e.target.value))}
                     />
                     <span className="weight-val">
                       {(weights[f.id] ?? 1).toFixed(1)}
@@ -975,32 +1014,74 @@ export function App() {
               </div>
               {(boundaryPenalty > 0 || connectivityPenalty > 0) && (
                 <p className="hint">
-                  The near-optimal optimum solves pure minimum-set: it ignores the
-                  compactness and connectivity penalties, which only steer the greedy
-                  heuristic.
+                  The near-optimal optimum ignores the compactness and connectivity
+                  penalties, which only steer the greedy heuristic.
                 </p>
               )}
               {comparison === null ? (
                 <p className="hint">
-                  Minimum-set only. Compares the greedy heuristic against a near-optimal
-                  optimum (solved to within 1% of the true optimum) for the current
-                  landscape and targets.
+                  {objective === 'max-coverage'
+                    ? 'Max coverage: the most target representation the budget can buy. Compares the greedy heuristic against a near-optimal optimum (within 1% of optimal).'
+                    : 'Minimum set: the cheapest plan meeting every target. Compares the greedy heuristic against a near-optimal optimum (within 1% of optimal).'}
                 </p>
-              ) : comparison.exact.feasible ? (
+              ) : comparison.kind === 'min-set' ? (
+                comparison.exact.feasible ? (
+                  <div className="compare-body">
+                    <div className="stats">
+                      <div className="stat">
+                        <span className="stat-label">Greedy cost</span>
+                        <span className="stat-value">{comparison.cmp.greedyCost}</span>
+                      </div>
+                      <div className="stat">
+                        <span className="stat-label">Near-optimal cost</span>
+                        <span className="stat-value">{comparison.cmp.exactCost}</span>
+                      </div>
+                      <div className="stat">
+                        <span className="stat-label">Gap</span>
+                        <span className="stat-value">
+                          {comparison.cmp.gap} ({comparison.cmp.gapPct.toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+                    <div className="maps">
+                      <GridView
+                        gridSize={SCENARIO.gridSize}
+                        caption="Both green; greedy-only amber; near-optimal-only blue"
+                        fill={diffFill(comparison.cmp)}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="info">
+                    The current targets are infeasible, so there is no near-optimal
+                    optimum to compare.
+                  </p>
+                )
+              ) : (
                 <div className="compare-body">
                   <div className="stats">
                     <div className="stat">
-                      <span className="stat-label">Greedy cost</span>
-                      <span className="stat-value">{comparison.cmp.greedyCost}</span>
+                      <span className="stat-label">Greedy coverage</span>
+                      <span className="stat-value">
+                        {coveragePctLabel(
+                          comparison.cmp.greedyCoverage,
+                          comparison.cmp.maxCoverage,
+                        )}
+                      </span>
                     </div>
                     <div className="stat">
-                      <span className="stat-label">Near-optimal cost</span>
-                      <span className="stat-value">{comparison.cmp.exactCost}</span>
+                      <span className="stat-label">Near-optimal coverage</span>
+                      <span className="stat-value">
+                        {coveragePctLabel(
+                          comparison.cmp.exactCoverage,
+                          comparison.cmp.maxCoverage,
+                        )}
+                      </span>
                     </div>
                     <div className="stat">
                       <span className="stat-label">Gap</span>
                       <span className="stat-value">
-                        {comparison.cmp.gap} ({comparison.cmp.gapPct.toFixed(1)}%)
+                        {comparison.cmp.gapPct.toFixed(1)} pts
                       </span>
                     </div>
                   </div>
@@ -1012,11 +1093,6 @@ export function App() {
                     />
                   </div>
                 </div>
-              ) : (
-                <p className="info">
-                  The current targets are infeasible, so there is no near-optimal
-                  optimum to compare.
-                </p>
               )}
             </div>
           )}
