@@ -35,6 +35,9 @@ export function GridView({
   inspectedId,
 }: GridViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // The last cell a drag painted, so pointermove paints once per cell crossed
+  // rather than repeatedly while the pointer sits inside one cell.
+  const lastPaintedRef = useRef<number | null>(null);
   const paintable = Boolean(onPaint);
   const clickable = paintable || Boolean(onInspect);
   const size = gridSize * CELL;
@@ -126,13 +129,23 @@ export function GridView({
                 e.preventDefault();
                 const id = cellFrom(e);
                 if (id === null) return;
+                lastPaintedRef.current = id;
                 onInspect?.(id);
                 onPaint?.(id);
               },
-              onPointerEnter: (e: PointerEvent<HTMLCanvasElement>) => {
+              // One canvas covers the whole grid, so drag painting rides
+              // pointermove (not per-cell pointerenter as with the old rects).
+              // Paint only when the pointer crosses into a new cell, so a
+              // toggling tool (lock in/out) fires once per cell, not per pixel.
+              onPointerMove: (e: PointerEvent<HTMLCanvasElement>) => {
                 if (e.buttons !== 1) return;
                 const id = cellFrom(e);
-                if (id !== null) onPaint?.(id);
+                if (id === null || id === lastPaintedRef.current) return;
+                lastPaintedRef.current = id;
+                onPaint?.(id);
+              },
+              onPointerUp: () => {
+                lastPaintedRef.current = null;
               },
             }
           : {})}
