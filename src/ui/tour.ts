@@ -39,6 +39,9 @@ export interface TourStep {
   readonly spotlight?: string;
   readonly showIrrep?: boolean;
   readonly connectivityPenalty?: number;
+  // Run the greedy-vs-near-optimal compare on entering the step, so the result
+  // is already on screen rather than behind a button press.
+  readonly compute?: boolean;
 }
 
 // How many leading steps make up the short "read the landscape" tour.
@@ -134,9 +137,10 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: 'exact',
     title: 'Greedy vs the true optimum',
-    body: 'The solver is a fast greedy heuristic. Click "Compute near-optimal optimum" to solve the same targets to within 1% of optimal and see how close greedy gets and where the two plans differ.',
+    body: 'The solver is a fast greedy heuristic. Here the same targets are solved to within 1% of optimal so you can see how close greedy gets and where the two plans differ. Recompute any time with "Compute near-optimal optimum".',
     region: 'compare',
     tab: 'method',
+    compute: true,
   },
   {
     id: 'tradeoff',
