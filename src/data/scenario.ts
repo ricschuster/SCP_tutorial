@@ -1,10 +1,13 @@
-// The starter teaching landscape. All values are synthetic and tuned for
-// teaching, not sourced from real data. See docs/design/02_example_scenario.md.
+// The teaching landscape. All values are synthetic and tuned for teaching, not
+// sourced from real data. See docs/design/04_land_cover_model.md.
 //
-// The landscape is generated deterministically from cell coordinates: three
-// features clustered (with some overlap) in different regions, and a cost surface
-// that rises toward a "developed" bottom-right corner. The mismatch between where
-// features are and where cost is cheap is what makes prioritization interesting.
+// The landscape is a grid of land-cover cells generated deterministically from
+// cell coordinates (fixed-phase value noise, no runtime randomness): recognisable
+// regions of forest, wetland/water, grassland, cropland, and a developed cluster.
+// Each cell also carries a habitat-quality factor and a cost-variation factor
+// (both smooth spatial fields). A cell's per-species feature amounts and its cost
+// are DERIVED from its cover via land-cover.ts; the engine still consumes plain
+// amounts and cost, so it is unchanged.
 
 import { GRID_SIZE } from '../engine/constants.ts';
 import type {
@@ -13,6 +16,7 @@ import type {
   PlanningUnitStatus,
   Problem,
 } from '../engine/types.ts';
+import { amountsForCover, costForCover, type CoverId, Q_MIN } from './land-cover.ts';
 
 export interface ScenarioFeature {
   readonly id: string;
@@ -24,6 +28,12 @@ export interface ScenarioUnit {
   readonly id: number;
   readonly row: number;
   readonly col: number;
+  readonly cover: CoverId;
+  // Fixed spatial fields (function of position, not cover), used by the
+  // derivation and, later, the cell inspector.
+  readonly quality: number;
+  readonly costVar: number;
+  // Derived from the fields above.
   readonly cost: number;
   readonly amounts: Readonly<Record<string, number>>;
 }
@@ -34,94 +44,75 @@ export interface Scenario {
   readonly units: readonly ScenarioUnit[];
 }
 
-interface FeatureBump {
-  readonly id: string;
-  readonly name: string;
-  readonly color: string;
-  readonly cr: number; // centre row
-  readonly cc: number; // centre col
-  readonly sigma: number;
-  readonly peak: number;
-}
-
-const FEATURE_BUMPS: readonly FeatureBump[] = [
-  {
-    id: 'forest',
-    name: 'Forest species',
-    color: '#2e7d32',
-    cr: 2,
-    cc: 3,
-    sigma: 2.3,
-    peak: 10,
-  },
-  {
-    id: 'wetland',
-    name: 'Wetland species',
-    color: '#1565c0',
-    cr: 6,
-    cc: 7,
-    sigma: 2.3,
-    peak: 10,
-  },
-  {
-    id: 'grassland',
-    name: 'Grassland species',
-    color: '#f9a825',
-    cr: 7,
-    cc: 2,
-    sigma: 2.6,
-    peak: 9,
-  },
+// The three species. Their per-cell amounts are derived from land cover via the
+// suitability matrix in land-cover.ts; ids here match the matrix rows.
+const FEATURES: readonly ScenarioFeature[] = [
+  { id: 'forest', name: 'Forest species', color: '#2e7d32' },
+  { id: 'wetland', name: 'Wetland species', color: '#1565c0' },
+  { id: 'grassland', name: 'Grassland species', color: '#f9a825' },
 ];
 
-// Amounts below this are treated as zero, giving crisp regions with genuine gaps.
-const AMOUNT_FLOOR = 0.6;
-
-function gaussian(
-  row: number,
-  col: number,
-  cr: number,
-  cc: number,
-  sigma: number,
-): number {
-  const d2 = (row - cr) ** 2 + (col - cc) ** 2;
-  return Math.exp(-d2 / (2 * sigma * sigma));
+function gaussian(row: number, col: number, cr: number, cc: number, s: number): number {
+  return Math.exp(-(((row - cr) ** 2 + (col - cc) ** 2) / (2 * s * s)));
 }
 
-function round1(x: number): number {
-  return Math.round(x * 10) / 10;
+// A smooth, deterministic field in [0, 1] from a few fixed-phase sinusoids. No
+// runtime randomness, so the landscape is stable across loads.
+function smooth01(row: number, col: number, phase: number): number {
+  const n =
+    Math.sin(row * 0.55 + phase) +
+    Math.cos(col * 0.5 + phase * 1.3) +
+    0.7 * Math.sin((row + col) * 0.3 + phase * 0.7) +
+    0.6 * Math.cos((row - col) * 0.42 + phase * 1.7);
+  return Math.min(1, Math.max(0, (n / 3.3 + 1) / 2));
+}
+
+// Region layout: score each cover class at a cell (blobs + a little wander) and
+// take the strongest. Grassland is the baseline that fills the gaps.
+function coverAt(row: number, col: number, n: number): CoverId {
+  const s = n / 30; // scale centres/sigmas written for a 30-grid
+  const jit = (phase: number): number => (smooth01(row, col, phase) - 0.5) * 0.35;
+  const scores: Record<CoverId, number> = {
+    forest: 1.1 * gaussian(row, col, 7 * s, 8 * s, 6.5 * s) + jit(0.5),
+    developed: 1.3 * gaussian(row, col, 22 * s, 7 * s, 3.4 * s) + jit(4.5),
+    cropland: 0.95 * gaussian(row, col, 9 * s, 21 * s, 6.5 * s) + jit(3.5),
+    wetland: 1.05 * gaussian(row, col, 23 * s, 22 * s, 5.5 * s) + jit(1.5),
+    water: 1.5 * gaussian(row, col, 26 * s, 25 * s, 2.6 * s) + jit(2.5),
+    grassland: 0.5 + jit(5.5),
+  };
+  let best: CoverId = 'grassland';
+  let bestScore = -Infinity;
+  for (const id of Object.keys(scores) as CoverId[]) {
+    if (scores[id] > bestScore) {
+      bestScore = scores[id];
+      best = id;
+    }
+  }
+  return best;
 }
 
 function buildScenario(): Scenario {
   const n = GRID_SIZE;
   const units: ScenarioUnit[] = [];
-
   for (let row = 0; row < n; row++) {
     for (let col = 0; col < n; col++) {
       const id = row * n + col;
-
-      const amounts: Record<string, number> = {};
-      for (const b of FEATURE_BUMPS) {
-        const value = round1(b.peak * gaussian(row, col, b.cr, b.cc, b.sigma));
-        if (value >= AMOUNT_FLOOR) amounts[b.id] = value;
-      }
-
-      // Cost: cheap top-left, rising toward the bottom-right, with an extra
-      // premium on the developed corner.
-      const gradient = 1 + 8 * ((row + col) / (2 * (n - 1)));
-      const corner = 4 * gaussian(row, col, n - 1, n - 1, 2);
-      const cost = Math.max(1, Math.round(gradient + corner));
-
-      units.push({ id, row, col, cost, amounts });
+      const cover = coverAt(row, col, n);
+      const quality = Q_MIN + (1 - Q_MIN) * smooth01(row, col, 1.7);
+      const costVar = (smooth01(row, col, 4.2) - 0.5) * 0.3;
+      units.push({
+        id,
+        row,
+        col,
+        cover,
+        quality,
+        costVar,
+        cost: costForCover(cover, costVar),
+        amounts: amountsForCover(cover, quality),
+      });
     }
   }
-
-  const features = FEATURE_BUMPS.map((b) => ({
-    id: b.id,
-    name: b.name,
-    color: b.color,
-  }));
-  return { gridSize: n, features, units };
+  return { gridSize: n, features: FEATURES, units };
 }
 
 export const SCENARIO: Scenario = buildScenario();
@@ -156,14 +147,19 @@ export function toProblem(targetFractions: Readonly<Record<string, number>>): Pr
   return toProblemFromUnits(makeWorkingUnits(), targetFractions);
 }
 
-// An editable copy of a planning unit. The UI keeps an array of these in state
-// so costs, feature amounts, and lock status can be painted on the map.
+// An editable copy of a planning unit. The UI keeps an array of these in state.
+// Cover and lock status are what the learner edits; amounts and cost are derived
+// from cover (kept in sync by applyCover) so the rest of the app can read them
+// directly.
 export interface WorkingUnit {
   id: number;
   row: number;
   col: number;
-  cost: number;
+  cover: CoverId;
+  quality: number;
+  costVar: number;
   amounts: Record<string, number>;
+  cost: number;
   status: PlanningUnitStatus;
 }
 
@@ -221,10 +217,24 @@ export function makeWorkingUnits(): WorkingUnit[] {
     id: u.id,
     row: u.row,
     col: u.col,
-    cost: u.cost,
+    cover: u.cover,
+    quality: u.quality,
+    costVar: u.costVar,
     amounts: { ...u.amounts },
+    cost: u.cost,
     status: 'available',
   }));
+}
+
+// Repaint a unit's cover, re-deriving its amounts and cost from the new cover and
+// the cell's (unchanged) quality and cost-variation fields.
+export function applyCover(unit: WorkingUnit, cover: CoverId): WorkingUnit {
+  return {
+    ...unit,
+    cover,
+    amounts: amountsForCover(cover, unit.quality),
+    cost: costForCover(cover, unit.costVar),
+  };
 }
 
 // Build a Problem from an editable landscape. Targets are a fraction of each

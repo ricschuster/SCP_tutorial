@@ -6,7 +6,7 @@ import {
   isDefaultState,
   type ScenarioState,
 } from './share.ts';
-import { makeWorkingUnits, SCENARIO } from './scenario.ts';
+import { applyCover, makeWorkingUnits, SCENARIO } from './scenario.ts';
 
 function editedState(): ScenarioState {
   const state = defaultState();
@@ -15,9 +15,9 @@ function editedState(): ScenarioState {
   state.objective = 'max-coverage';
   state.budgetPct = 72;
   state.boundaryPenalty = 3.5;
-  // Edit a handful of units: cost, amounts, and both lock statuses.
-  state.units[0]!.cost = 13;
-  state.units[1]!.amounts = { [SCENARIO.features[0]!.id]: 9 };
+  // Edit a handful of units: repaint cover, and set both lock statuses.
+  state.units[0] = applyCover(state.units[0]!, 'developed');
+  state.units[1] = applyCover(state.units[1]!, 'water');
   state.units[2]!.status = 'locked-in';
   state.units[3]!.status = 'locked-out';
   return state;
@@ -40,8 +40,12 @@ test('a fully edited state round-trips exactly', () => {
   expect(decoded!.objective).toBe('max-coverage');
   expect(decoded!.budgetPct).toBe(72);
   expect(decoded!.boundaryPenalty).toBe(3.5);
-  expect(decoded!.units[0]!.cost).toBe(13);
-  expect(decoded!.units[1]!.amounts).toEqual({ [SCENARIO.features[0]!.id]: 9 });
+  expect(decoded!.units[0]!.cover).toBe('developed');
+  expect(decoded!.units[1]!.cover).toBe('water');
+  // Repaint re-derives amounts and cost from the new cover.
+  expect(decoded!.units[1]!.cost).toBe(
+    applyCover(makeWorkingUnits()[1]!, 'water').cost,
+  );
   expect(decoded!.units[2]!.status).toBe('locked-in');
   expect(decoded!.units[3]!.status).toBe('locked-out');
   // Untouched units keep their base values.
