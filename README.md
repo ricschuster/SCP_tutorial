@@ -7,10 +7,15 @@ solution responds to your choices.
 
 ## Status
 
-Design defined, pre-build. The repo harness and design docs (project brief,
-prioritization model, milestones) and the stack and solver ADRs are in place.
-Implementation starts with M0 (scaffold) and M1 (the prioritization engine).
-See `docs/design/`.
+Live and shipping. The first tagged release,
+[v0.1.0-mvp](https://github.com/ricschuster/SCP_tutorial/releases/tag/v0.1.0-mvp),
+covers the post-MVP teaching app: the core Explore loop, a Method deep-dive
+(min-set and max-coverage objectives with an exact HiGHS solver), boundary and
+connectivity penalties, irreplaceability, canvas rendering, a two-level guided
+tour, and full-scenario URL sharing. 98 unit tests pass (engine coverage ~98%).
+The next track is data ingestion (see issues #23 and #25).
+
+Live app: https://ricschuster.github.io/SCP_tutorial/
 
 ## The idea
 
@@ -30,6 +35,9 @@ One shared prioritization engine with three depth layers over it:
   milestones.
 - `docs/decisions/`: architecture decision records (ADRs).
 - `docs/handoffs/`: session handoffs.
+- [Build-effort estimate](https://ricschuster.github.io/SCP_tutorial/effort-estimate.html):
+  how long the app would take one person to build alone, by prior expertise
+  (pinned to release v0.1.0-mvp).
 
 ## License
 
