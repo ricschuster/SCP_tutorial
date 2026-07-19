@@ -34,7 +34,9 @@ const COST_LO: Rgb = [235, 237, 232];
 const COST_HI: Rgb = [60, 60, 60];
 const SELECTED = 'rgb(27 120 55)';
 const UNSELECTED = 'rgb(230 230 230)';
-const LOCK_IN = '#1b7837';
+// Lock-in is violet, deliberately distinct from the selected-priority green it
+// would otherwise share a border/fill with. Lock-out stays red.
+const LOCK_IN = '#7b1fa2';
 const LOCK_OUT = '#c0392b';
 const DIFF_BOTH = 'rgb(27 120 55)';
 const DIFF_GREEDY = '#f9a825';
@@ -43,6 +45,15 @@ const DIFF_NONE = 'rgb(235 235 235)';
 
 const AMOUNT_MAX = 12;
 const COST_MAX = 15;
+
+// Legend for the priority map. Built from the color constants so they stay the
+// single source of truth. "fill" swatches are solid; "border" swatches match how
+// lock status shows on the map (a colored outline).
+const LEGEND: { label: string; kind: 'fill' | 'border'; color: string }[] = [
+  { label: 'Selected', kind: 'fill', color: SELECTED },
+  { label: 'Locked in', kind: 'border', color: LOCK_IN },
+  { label: 'Locked out', kind: 'border', color: LOCK_OUT },
+];
 
 type Tool = 'amount' | 'cost' | 'lockIn' | 'lockOut' | 'clear';
 
@@ -74,9 +85,16 @@ function applyBrush(unit: WorkingUnit, brush: Brush): WorkingUnit {
     case 'cost':
       return { ...unit, cost: Math.max(1, brush.costValue) };
     case 'lockIn':
-      return { ...unit, status: 'locked-in' };
+      // Toggle: clicking a locked-in cell with this tool clears it.
+      return {
+        ...unit,
+        status: unit.status === 'locked-in' ? 'available' : 'locked-in',
+      };
     case 'lockOut':
-      return { ...unit, status: 'locked-out' };
+      return {
+        ...unit,
+        status: unit.status === 'locked-out' ? 'available' : 'locked-out',
+      };
     case 'clear':
       return { ...unit, status: 'available' };
     default:
@@ -271,9 +289,9 @@ export function App() {
       : brush.tool === 'cost'
         ? 'Edit: paint cost'
         : brush.tool === 'lockIn'
-          ? 'Edit: lock in (always protect)'
+          ? 'Edit: lock in (click to toggle; always protected)'
           : brush.tool === 'lockOut'
-            ? 'Edit: lock out (never protect)'
+            ? 'Edit: lock out (click to toggle; never selected)'
             : 'Edit: clear lock status';
 
   return (
@@ -547,6 +565,24 @@ export function App() {
                   onPaint={paint}
                 />
               </div>
+              <ul className="legend">
+                {LEGEND.map((item) => (
+                  <li key={item.label}>
+                    <span
+                      className="legend-swatch"
+                      style={
+                        item.kind === 'fill'
+                          ? { background: item.color }
+                          : {
+                              border: `2px solid ${item.color}`,
+                              background: 'var(--surface)',
+                            }
+                      }
+                    />
+                    {item.label}
+                  </li>
+                ))}
+              </ul>
             </div>
             <div className={`curve-wrap${tourHi('curve')}`} data-region="curve">
               <CostTargetCurve
