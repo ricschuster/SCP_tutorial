@@ -44,7 +44,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: 'habitat',
     title: 'Habitat comes from cover',
-    body: 'Habitat for each species is computed from cover: suitability x habitat quality x 10. The inspector shows the arithmetic for this forest cell, where the forest species scores high.',
+    body: 'Habitat for each species is computed from cover: suitability x habitat quality x 10. The inspector shows the arithmetic for this forest cell, where a forest species like the Woodland Caribou scores high.',
     region: 'features',
     ...(forestHi !== undefined ? { inspect: forestHi } : {}),
   },

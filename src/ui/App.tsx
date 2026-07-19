@@ -902,7 +902,7 @@ export function App() {
                       className={f.id === curveFocus ? 'tool tool-on' : 'tool'}
                       onClick={() => setCurveFocus(f.id)}
                     >
-                      {f.name.replace(' species', '')}
+                      {f.name.replace(/\s*\([^)]*\)$/, '')}
                     </button>
                   ))}
                 </div>
