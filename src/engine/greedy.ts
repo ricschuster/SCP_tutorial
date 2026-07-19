@@ -6,6 +6,17 @@ import type { PlanningUnit, Problem, Solution } from './types.ts';
 
 export type Objective = 'min-set' | 'max-coverage';
 
+// One end of a connectivity link: a partner unit and the strength c_ij to it.
+export interface ConnectivityLink {
+  readonly to: number;
+  readonly strength: number;
+}
+
+// Symmetric connectivity strengths c_ij over a bounded neighbourhood: each unit
+// id maps to its connected partners and their strengths. A deterministic
+// function of the landscape; built in src/data.
+export type ConnectivityMatrix = ReadonlyMap<number, readonly ConnectivityLink[]>;
+
 export interface SolveOptions {
   // 'min-set' (default): cheapest set that meets every target.
   // 'max-coverage': best progress toward targets within a cost budget.
@@ -18,6 +29,13 @@ export interface SolveOptions {
   boundaryPenalty?: number;
   // Grid adjacency: unit id -> neighbouring unit ids. Used by the penalty.
   neighbors?: ReadonlyMap<number, readonly number[]>;
+  // Generalized connectivity penalty (prioritizr style): rewards selecting units
+  // connected to the already-chosen set. Compactness is the adjacency special
+  // case. Needs `connectivity` to have an effect. Greedy-only; the exact solver
+  // ignores it, exactly like the boundary penalty.
+  connectivityPenalty?: number;
+  // The connectivity matrix c_ij the penalty scores against.
+  connectivity?: ConnectivityMatrix;
 }
 
 interface Candidate {
@@ -54,19 +72,39 @@ function boundaryDelta(
   return 4 - 2 * adjacent;
 }
 
-// Cost used for scoring: the real cost plus the compactness penalty. Floored at a
-// small positive value so the score stays well defined.
+// Total connectivity strength from this unit to the already-selected set. Higher
+// means better connected to the reserve, so the unit is rewarded (its scoring
+// cost drops). O(neighbourhood size) per candidate, so the matrix is bounded.
+function connectivityToChosen(
+  unitId: number,
+  chosen: ReadonlySet<number>,
+  connectivity: ConnectivityMatrix | undefined,
+): number {
+  const links = connectivity?.get(unitId);
+  if (links === undefined) return 0;
+  let total = 0;
+  for (const link of links) if (chosen.has(link.to)) total += link.strength;
+  return total;
+}
+
+// Cost used for scoring: the real cost, plus the compactness penalty (rewards
+// adjacency) and minus the connectivity reward (rewards links to the chosen
+// set). Floored at a small positive value so the score stays well defined.
 function scoringCost(
   unit: PlanningUnit,
   chosen: ReadonlySet<number>,
   options: SolveOptions,
 ): number {
-  const penalty = options.boundaryPenalty ?? 0;
-  if (penalty <= 0 || !options.neighbors) return unit.cost;
-  return Math.max(
-    EPS,
-    unit.cost + penalty * boundaryDelta(unit.id, chosen, options.neighbors),
-  );
+  let cost = unit.cost;
+  const boundary = options.boundaryPenalty ?? 0;
+  if (boundary > 0 && options.neighbors) {
+    cost += boundary * boundaryDelta(unit.id, chosen, options.neighbors);
+  }
+  const connectivity = options.connectivityPenalty ?? 0;
+  if (connectivity > 0 && options.connectivity) {
+    cost -= connectivity * connectivityToChosen(unit.id, chosen, options.connectivity);
+  }
+  return Math.max(EPS, cost);
 }
 
 export function solve(problem: Problem, options: SolveOptions = {}): Solution {

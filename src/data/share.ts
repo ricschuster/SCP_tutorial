@@ -32,6 +32,7 @@ const SCHEMA_VERSION = 2;
 // out of bounds.
 const BUDGET_PCT = { min: 0, max: 100 } as const;
 const BOUNDARY_PENALTY = { min: 0, max: 5 } as const;
+const CONNECTIVITY_PENALTY = { min: 0, max: 5 } as const;
 const WEIGHT = { min: 0, max: 3 } as const;
 const DEFAULT_BUDGET_PCT = 50;
 const DEFAULT_WEIGHT = 1;
@@ -44,6 +45,9 @@ export interface ScenarioState {
   objective: Objective;
   budgetPct: number;
   boundaryPenalty: number;
+  connectivityPenalty: number;
+  // Whether the connectivity matrix uses the same-cover (functional) boost.
+  sameCover: boolean;
   view: AppView;
   units: WorkingUnit[];
 }
@@ -64,6 +68,10 @@ interface Wire {
   o: 0 | 1;
   b: number;
   p: number;
+  // Connectivity penalty; absent (older links) decodes to 0.
+  cn?: number;
+  // Same-cover connectivity boost on; absent means off.
+  sc?: 1;
   // Active view: absent means 'explore' (the default), so a clean URL stays clean.
   vw?: 1;
   u: WireUnit[];
@@ -86,6 +94,8 @@ export function defaultState(): ScenarioState {
     objective: 'min-set',
     budgetPct: DEFAULT_BUDGET_PCT,
     boundaryPenalty: 0,
+    connectivityPenalty: 0,
+    sameCover: false,
     view: 'explore',
     units: makeWorkingUnits(),
   };
@@ -109,6 +119,8 @@ export function isDefaultState(state: ScenarioState): boolean {
   if (state.objective !== 'min-set') return false;
   if (state.budgetPct !== DEFAULT_BUDGET_PCT) return false;
   if (state.boundaryPenalty !== 0) return false;
+  if (state.connectivityPenalty !== 0) return false;
+  if (state.sameCover) return false;
   if (state.view !== 'explore') return false;
   for (const id of FEATURE_IDS) {
     if (state.fractions[id] !== DEFAULT_TARGET_FRACTION) return false;
@@ -145,6 +157,8 @@ function toWire(state: ScenarioState): Wire {
     o: state.objective === 'max-coverage' ? 1 : 0,
     b: state.budgetPct,
     p: state.boundaryPenalty,
+    ...(state.connectivityPenalty !== 0 ? { cn: state.connectivityPenalty } : {}),
+    ...(state.sameCover ? { sc: 1 as const } : {}),
     ...(state.view === 'method' ? { vw: 1 as const } : {}),
     u,
   };
@@ -232,6 +246,11 @@ export function decodeState(token: string | null | undefined): ScenarioState | n
       typeof wire.p === 'number' && Number.isFinite(wire.p)
         ? clamp(wire.p, BOUNDARY_PENALTY.min, BOUNDARY_PENALTY.max)
         : 0,
+    connectivityPenalty:
+      typeof wire.cn === 'number' && Number.isFinite(wire.cn)
+        ? clamp(wire.cn, CONNECTIVITY_PENALTY.min, CONNECTIVITY_PENALTY.max)
+        : 0,
+    sameCover: wire.sc === 1,
     view: wire.vw === 1 ? 'method' : 'explore',
     units: readUnits(wire.u),
   };
