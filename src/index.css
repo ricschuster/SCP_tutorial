@@ -479,16 +479,18 @@ body {
   color: var(--muted);
 }
 
-.grid-svg {
+.grid-canvas {
   width: 15rem;
   max-width: 100%;
   height: auto;
+  aspect-ratio: 1 / 1;
+  display: block;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
 }
 
-.grid-svg-editable {
+.grid-canvas-editable {
   touch-action: none;
 }
 

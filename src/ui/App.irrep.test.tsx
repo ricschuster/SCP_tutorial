@@ -27,28 +27,43 @@ function irrepCheckbox(container: HTMLElement): HTMLInputElement {
   return label!.querySelector('input[type="checkbox"]') as HTMLInputElement;
 }
 
-test('irreplaceability layer is off by default and toggles on', async () => {
-  const { container, cleanup } = await render();
-  // Off by default: no heat map yet.
-  expect(container.textContent).not.toContain('Irreplaceability (how often selected)');
+// Toggling the layer on runs the irreplaceability Monte Carlo (dozens of greedy
+// solves over 900 units) synchronously, which can exceed the 5s default on a
+// slow CI runner, so these two tests get a longer explicit timeout.
+const IRREP_TEST_TIMEOUT = 20000;
 
-  await act(async () => irrepCheckbox(container).click());
+test(
+  'irreplaceability layer is off by default and toggles on',
+  async () => {
+    const { container, cleanup } = await render();
+    // Off by default: no heat map yet.
+    expect(container.textContent).not.toContain(
+      'Irreplaceability (how often selected)',
+    );
 
-  // The heat map and its scale legend appear.
-  expect(container.textContent).toContain('Irreplaceability (how often selected)');
-  expect(container.textContent).toContain('Irreplaceable');
-  expect(container.textContent).toContain('Interchangeable');
-  cleanup();
-});
+    await act(async () => irrepCheckbox(container).click());
 
-test('irreplaceability heat marks at least one fully irreplaceable cell', async () => {
-  const { container, cleanup } = await render();
-  await act(async () => irrepCheckbox(container).click());
+    // The heat map and its scale legend appear.
+    expect(container.textContent).toContain('Irreplaceability (how often selected)');
+    expect(container.textContent).toContain('Irreplaceable');
+    expect(container.textContent).toContain('Interchangeable');
+    cleanup();
+  },
+  IRREP_TEST_TIMEOUT,
+);
 
-  // The heat fill ramps light-to-warm; a fully irreplaceable cell is the ramp's
-  // hot end (rgb(179 0 0)). The default landscape has essential cells, so at
-  // least one should reach it.
-  const hot = container.querySelectorAll('rect[fill="rgb(179 0 0)"]');
-  expect(hot.length).toBeGreaterThan(0);
-  cleanup();
-});
+test(
+  'the irreplaceability heat map appears and toggles back off',
+  async () => {
+    const { container, cleanup } = await render();
+    const caption = 'Irreplaceability (how often selected)';
+
+    await act(async () => irrepCheckbox(container).click());
+    expect(container.querySelector(`canvas[aria-label="${caption}"]`)).not.toBeNull();
+
+    await act(async () => irrepCheckbox(container).click());
+    expect(container.querySelector(`canvas[aria-label="${caption}"]`)).toBeNull();
+    cleanup();
+  },
+  IRREP_TEST_TIMEOUT,
+);

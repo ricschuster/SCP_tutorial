@@ -37,10 +37,21 @@ test('App renders the title and target controls', async () => {
 
 test('App solves and shows a priority map, cost, and attainment', async () => {
   const { container, cleanup } = await render();
-  const selected = container.querySelectorAll('rect[fill="rgb(27 120 55)"]');
-  expect(selected.length).toBeGreaterThan(0);
+  // The priority map renders as a labelled canvas.
+  expect(
+    container.querySelector('canvas[aria-label="Selected priorities"]'),
+  ).not.toBeNull();
   expect(container.textContent).toContain('Total cost');
   expect(container.textContent).toContain('Areas selected');
+  // The solver picked a non-empty set: the "Areas selected" stat reads "N / M"
+  // with N > 0.
+  const areas = [...container.querySelectorAll('.stat')].find((s) =>
+    s.textContent?.includes('Areas selected'),
+  );
+  const selectedCount = Number(
+    areas?.querySelector('.stat-value')?.textContent?.split('/')[0],
+  );
+  expect(selectedCount).toBeGreaterThan(0);
   cleanup();
 });
 
@@ -63,10 +74,27 @@ test('tabs switch between Explore and Method content', async () => {
 test('clicking a cell opens the mechanics inspector', async () => {
   const { container, cleanup } = await render();
   // The first non-editable grid is the priority map; its cells are inspectable.
-  const rect = container.querySelector('svg.grid-svg:not(.grid-svg-editable) rect');
-  expect(rect).not.toBeNull();
+  const canvas = container.querySelector<HTMLCanvasElement>(
+    'canvas.grid-canvas:not(.grid-canvas-editable)',
+  );
+  expect(canvas).not.toBeNull();
+  // jsdom does no layout, so give the canvas a known on-screen box; a click near
+  // its top-left then maps to cell (0, 0).
+  canvas!.getBoundingClientRect = () => ({
+    left: 0,
+    top: 0,
+    width: 660,
+    height: 660,
+    right: 660,
+    bottom: 660,
+    x: 0,
+    y: 0,
+    toJSON() {},
+  });
   await act(async () => {
-    rect!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    canvas!.dispatchEvent(
+      new MouseEvent('pointerdown', { bubbles: true, clientX: 5, clientY: 5 }),
+    );
   });
   expect(container.textContent).toContain('Habitat quality here');
   cleanup();
@@ -74,7 +102,7 @@ test('clicking a cell opens the mechanics inspector', async () => {
 
 test('App exposes an editable map and a reset control', async () => {
   const { container, cleanup } = await render();
-  expect(container.querySelector('svg.grid-svg-editable')).not.toBeNull();
+  expect(container.querySelector('canvas.grid-canvas-editable')).not.toBeNull();
   const reset = [...container.querySelectorAll('button')].find(
     (b) => b.textContent === 'Reset landscape',
   );

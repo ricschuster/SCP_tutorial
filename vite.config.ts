@@ -15,11 +15,6 @@ export default defineConfig(({ command }) => ({
     // Under Vitest there is no browser worker, so use the synchronous Node build
     // instead; both expose the same factory and model shape.
     alias: { 'glpk.js': 'glpk.js/node' },
-    // The UI integration tests mount the full app, which renders several 30x30
-    // SVG grids (~5.4k rects) and re-renders on each interaction. That is heavy
-    // in jsdom on slower CI runners, so allow more than the 5s default. The real
-    // rendering fix is the canvas pass (issue #31).
-    testTimeout: 20000,
     coverage: {
       provider: 'v8',
       // The pure prioritization engine is where correctness lives; hold it to a
