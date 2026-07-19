@@ -517,6 +517,41 @@ body {
   flex: none;
 }
 
+.editor-map-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.irrep-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.irrep-scale {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
+}
+
+.irrep-scale .hint {
+  margin: 0;
+}
+
+.irrep-bar {
+  flex: 0 1 8rem;
+  height: 0.6rem;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
 .inspector-head {
   display: flex;
   flex-wrap: wrap;

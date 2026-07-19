@@ -5,3 +5,4 @@ export * from './amounts.ts';
 export * from './feasibility.ts';
 export * from './attainment.ts';
 export * from './greedy.ts';
+export * from './irreplaceability.ts';
