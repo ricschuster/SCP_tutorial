@@ -1,7 +1,9 @@
 import {
   amountsForCover,
+  baseCostOf,
   costForCover,
   COVERS,
+  explainCover,
   isCoverId,
   Q_MIN,
   SPECIES_PEAK,
@@ -30,6 +32,22 @@ test('cost follows the cover base cost, nudged by variation, never below 1', () 
   expect(costForCover('forest', 0)).toBe(forest.baseCost);
   expect(costForCover('developed', 0)).toBeGreaterThan(costForCover('water', 0));
   expect(costForCover('water', -0.9)).toBeGreaterThanOrEqual(1);
+});
+
+test('explainCover matches amountsForCover and costForCover term by term', () => {
+  const quality = 0.8;
+  const costVar = 0.1;
+  const ex = explainCover('forest', quality, costVar);
+  expect(ex.cover).toBe('forest');
+  expect(ex.cost.base).toBe(baseCostOf('forest'));
+  expect(ex.cost.value).toBe(costForCover('forest', costVar));
+  // The forest species amount in the breakdown equals the derived amount.
+  const forest = ex.species.find((s) => s.id === 'forest')!;
+  expect(forest.suit).toBe(1);
+  expect(forest.amount).toBe(amountsForCover('forest', quality).forest);
+  // A species with no habitat here reports amount 0.
+  const developed = explainCover('developed', quality, costVar);
+  expect(developed.species.every((s) => s.amount === 0)).toBe(true);
 });
 
 test('isCoverId guards unknown values', () => {

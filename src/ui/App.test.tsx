@@ -38,6 +38,18 @@ test('App solves and shows a priority map, cost, and attainment', async () => {
   cleanup();
 });
 
+test('clicking a cell opens the mechanics inspector', async () => {
+  const { container, cleanup } = await render();
+  // The first non-editable grid is the priority map; its cells are inspectable.
+  const rect = container.querySelector('svg.grid-svg:not(.grid-svg-editable) rect');
+  expect(rect).not.toBeNull();
+  await act(async () => {
+    rect!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  });
+  expect(container.textContent).toContain('Habitat quality here');
+  cleanup();
+});
+
 test('App exposes an editable map and a reset control', async () => {
   const { container, cleanup } = await render();
   expect(container.querySelector('svg.grid-svg-editable')).not.toBeNull();

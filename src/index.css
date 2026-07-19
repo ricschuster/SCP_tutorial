@@ -484,6 +484,89 @@ body {
   flex: none;
 }
 
+.inspector-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.inspector-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.inspect-table,
+.rules {
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspect-table {
+  margin-top: 0.5rem;
+}
+
+.inspect-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: 0.2rem 0.75rem 0.2rem 0;
+  white-space: nowrap;
+}
+
+.inspect-table .calc {
+  color: var(--muted);
+  padding-right: 0.75rem;
+}
+
+.inspect-table .calc-out {
+  font-weight: 600;
+  text-align: right;
+}
+
+.rules-wrap {
+  overflow-x: auto;
+}
+
+.rules caption {
+  text-align: left;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+
+.rules th,
+.rules td {
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.5rem;
+  text-align: center;
+}
+
+.rules th {
+  font-weight: 600;
+}
+
+.rules thead th {
+  white-space: nowrap;
+}
+
+.rules tbody th {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.rules .swatch {
+  vertical-align: middle;
+  margin-right: 0.3rem;
+}
+
+.rules .zero {
+  color: var(--muted);
+}
+
 .editor-row {
   display: flex;
   flex-wrap: wrap;

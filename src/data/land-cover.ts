@@ -102,3 +102,35 @@ export function amountsForCover(
 export function costForCover(cover: CoverId, costVar: number): number {
   return Math.max(1, Math.round(BASE_COST[cover] * (1 + costVar)));
 }
+
+export function baseCostOf(cover: CoverId): number {
+  return BASE_COST[cover];
+}
+
+// A term-by-term breakdown of how a cell's amounts and cost are computed, for the
+// cell inspector. Pure, so it is unit-tested and cannot drift from the actual
+// derivation above.
+export interface CellExplanation {
+  cover: CoverId;
+  quality: number;
+  species: { id: string; suit: number; amount: number }[];
+  cost: { base: number; costVar: number; value: number };
+}
+
+export function explainCover(
+  cover: CoverId,
+  quality: number,
+  costVar: number,
+): CellExplanation {
+  const species = SPECIES_IDS.map((id) => {
+    const suit = SUITABILITY[id]?.[cover] ?? 0;
+    const raw = round1(suit * quality * SPECIES_PEAK);
+    return { id, suit, amount: raw >= AMOUNT_FLOOR ? raw : 0 };
+  });
+  return {
+    cover,
+    quality,
+    species,
+    cost: { base: BASE_COST[cover], costVar, value: costForCover(cover, costVar) },
+  };
+}
