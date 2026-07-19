@@ -122,3 +122,19 @@ Negative / trade-offs:
   bundle is unaffected.
 - HiGHS carries more fixed per-solve overhead than GLPK on tiny instances, so a
   future MVP-scale problem would solve marginally slower; irrelevant at this scale.
+
+## Update (both follow-ups shipped)
+
+- The guided tour's compare step now auto-runs the solve on arrival instead of
+  pointing at the button (its `TourStep.compute` flag drives `runCompare`).
+- The compare panel now respects the objective toggle: with max coverage selected
+  it compares greedy against a near-optimal max-coverage optimum
+  (`solveExactMaxCoverage`), reporting coverage as a percentage of the achievable
+  ceiling with the gap in percentage points. Both sides drop the greedy penalties,
+  as min-set already did.
+- Max-coverage solves to the **true optimum (gap 0)**, not the 1% gap min-set uses.
+  It is cheap here (~0.1-0.2s at most budgets, ~1.4s worst case near the budget
+  where all targets just become reachable). A gap would let the "optimum" come back
+  slightly below greedy at generous budgets, where greedy already reaches the
+  ceiling; a negative gap reads as "the optimum is worse", so max-coverage pays the
+  small cost of being exact. "Near-optimal (within 1%)" still holds, since 0 <= 1%.

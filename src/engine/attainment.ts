@@ -12,6 +12,21 @@ export function totalCost(problem: Problem, selected: readonly number[]): number
   return cost;
 }
 
+// Weighted coverage score: how much of each target is represented, capped at the
+// target, summed with per-feature weights (missing weights default to 1). This is
+// the max-coverage objective, so representation beyond a target does not count.
+export function coverageValue(
+  attainment: readonly FeatureAttainment[],
+  weights?: Readonly<Record<string, number>>,
+): number {
+  let value = 0;
+  for (const a of attainment) {
+    const weight = weights?.[a.featureId] ?? 1;
+    value += weight * Math.min(a.represented, a.target);
+  }
+  return value;
+}
+
 // Per-feature representation for a set of selected units, and whether each
 // target is met.
 export function attainmentFor(

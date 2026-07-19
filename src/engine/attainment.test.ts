@@ -1,5 +1,5 @@
-import { attainmentFor, totalCost } from './attainment.ts';
-import type { PlanningUnit, Problem } from './types.ts';
+import { attainmentFor, coverageValue, totalCost } from './attainment.ts';
+import type { FeatureAttainment, PlanningUnit, Problem } from './types.ts';
 
 function unit(id: number, cost: number, amounts: Record<string, number>): PlanningUnit {
   return { id, cost, status: 'available', amounts };
@@ -29,4 +29,14 @@ test('attainmentFor reports represented amount and met/unmet per feature', () =>
     { featureId: 'A', represented: 3, target: 3, met: true },
     { featureId: 'B', represented: 2, target: 5, met: false },
   ]);
+});
+
+test('coverageValue caps each feature at its target and applies weights', () => {
+  const attainment: FeatureAttainment[] = [
+    { featureId: 'A', represented: 5, target: 10, met: false }, // below target: counts 5
+    { featureId: 'B', represented: 12, target: 10, met: true }, // over target: capped at 10
+  ];
+  expect(coverageValue(attainment)).toBe(15);
+  expect(coverageValue(attainment, { A: 2 })).toBe(20); // 2*5 + 1*10
+  expect(coverageValue([])).toBe(0);
 });
