@@ -110,6 +110,47 @@ test('App exposes an editable map and a reset control', async () => {
   cleanup();
 });
 
+test('habitat maps are a combined layer plus a species spotlight selector', async () => {
+  const { container, cleanup } = await render();
+  // A single combined-habitat scalar map, plus a spotlight defaulting to the
+  // first species; no per-species small multiples.
+  expect(
+    container.querySelector('canvas[aria-label^="Combined habitat"]'),
+  ).not.toBeNull();
+  expect(
+    container.querySelector('canvas[aria-label^="Forest species habitat"]'),
+  ).not.toBeNull();
+
+  const select = container.querySelector(
+    '.spotlight-select select',
+  ) as HTMLSelectElement;
+  expect(select).not.toBeNull();
+  // Every feature is an option (8 species now).
+  expect(select.querySelectorAll('option').length).toBeGreaterThanOrEqual(8);
+
+  await act(async () => {
+    select.value = 'waterbird';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(
+    container.querySelector('canvas[aria-label^="Waterbird species habitat"]'),
+  ).not.toBeNull();
+  expect(
+    container.querySelector('canvas[aria-label^="Forest species habitat"]'),
+  ).toBeNull();
+  cleanup();
+});
+
+test('the feature table lists every species with an attainment bar', async () => {
+  const { container, cleanup } = await render();
+  const table = container.querySelector('table.feature-table');
+  expect(table).not.toBeNull();
+  const rows = table!.querySelectorAll('tbody tr');
+  expect(rows.length).toBe(8);
+  expect(table!.querySelectorAll('.bar-fill').length).toBe(8);
+  cleanup();
+});
+
 // Set a controlled range input's value the way React expects (native setter,
 // then an input event), so onChange fires.
 function setRange(input: HTMLInputElement, value: string): void {

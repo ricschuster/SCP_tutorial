@@ -44,12 +44,19 @@ export interface Scenario {
   readonly units: readonly ScenarioUnit[];
 }
 
-// The three species. Their per-cell amounts are derived from land cover via the
-// suitability matrix in land-cover.ts; ids here match the matrix rows.
+// The species. Ids match the suitability-matrix rows in land-cover.ts. Colours
+// are used only for feature identity in the target/weight controls and the
+// feature table; the maps shade habitat on a single scalar ramp, not per-species
+// hues, so the display scales to many features (see docs/design/08).
 const FEATURES: readonly ScenarioFeature[] = [
   { id: 'forest', name: 'Forest species', color: '#2e7d32' },
   { id: 'wetland', name: 'Wetland species', color: '#1565c0' },
   { id: 'grassland', name: 'Grassland species', color: '#f9a825' },
+  { id: 'riparian', name: 'Riparian species', color: '#00acc1' },
+  { id: 'farmland', name: 'Farmland species', color: '#6d4c41' },
+  { id: 'waterbird', name: 'Waterbird species', color: '#5e35b1' },
+  { id: 'generalist', name: 'Generalist species', color: '#546e7a' },
+  { id: 'shrubland', name: 'Shrubland species', color: '#c0ca33' },
 ];
 
 function gaussian(row: number, col: number, cr: number, cc: number, s: number): number {
@@ -179,6 +186,22 @@ export function featureTotalOf(
 export function featureMaxOf(units: readonly HasAmounts[], featureId: string): number {
   let max = 0;
   for (const unit of units) max = Math.max(max, unit.amounts[featureId] ?? 0);
+  return max;
+}
+
+// Combined habitat in a unit: the total amount summed across all species. Used
+// by the single "combined habitat" scalar map, so the display does not need one
+// coloured layer per feature.
+export function combinedHabitatOf(unit: HasAmounts): number {
+  let total = 0;
+  for (const amount of Object.values(unit.amounts)) total += amount;
+  return total;
+}
+
+// Largest combined-habitat total across a set of units (scales the combined map).
+export function combinedHabitatMaxOf(units: readonly HasAmounts[]): number {
+  let max = 0;
+  for (const unit of units) max = Math.max(max, combinedHabitatOf(unit));
   return max;
 }
 

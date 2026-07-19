@@ -73,6 +73,50 @@ export const SUITABILITY: Record<string, Record<CoverId, number>> = {
     developed: 0,
     water: 0,
   },
+  // Additional species over the same six cover classes. Adding a species is just
+  // another row here (and a matching entry in SCENARIO.features): the whole app
+  // derives from the suitability matrix. Developed stays 0 for every species, so
+  // built land reads as "no habitat" (the inspector and tests rely on this).
+  riparian: {
+    forest: 0.4,
+    wetland: 0.7,
+    grassland: 0.1,
+    cropland: 0.05,
+    developed: 0,
+    water: 0.6,
+  },
+  farmland: {
+    forest: 0.05,
+    wetland: 0.05,
+    grassland: 0.5,
+    cropland: 1.0,
+    developed: 0,
+    water: 0,
+  },
+  waterbird: {
+    forest: 0,
+    wetland: 0.7,
+    grassland: 0.05,
+    cropland: 0.05,
+    developed: 0,
+    water: 1.0,
+  },
+  generalist: {
+    forest: 0.5,
+    wetland: 0.45,
+    grassland: 0.6,
+    cropland: 0.5,
+    developed: 0,
+    water: 0.2,
+  },
+  shrubland: {
+    forest: 0.35,
+    wetland: 0.15,
+    grassland: 0.7,
+    cropland: 0.55,
+    developed: 0,
+    water: 0,
+  },
 };
 
 export const SPECIES_IDS: readonly string[] = Object.keys(SUITABILITY);
