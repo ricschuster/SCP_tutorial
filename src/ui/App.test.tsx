@@ -109,3 +109,36 @@ test('App exposes an editable map and a reset control', async () => {
   expect(reset).toBeDefined();
   cleanup();
 });
+
+// Set a controlled range input's value the way React expects (native setter,
+// then an input event), so onChange fires.
+function setRange(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    'value',
+  )!.set!;
+  setter.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+test('the connectivity control appears on Method and reveals the same-cover option', async () => {
+  const { container, cleanup } = await render();
+  const methodTab = [...container.querySelectorAll('button')].find(
+    (b) => b.textContent === 'Method (advanced)',
+  );
+  await act(async () => methodTab!.click());
+
+  expect(container.textContent).toContain('Connectivity:');
+  // The same-cover boost and the exact-ignores note are hidden until it is on.
+  expect(container.textContent).not.toContain('Link same cover');
+
+  const control = [...container.querySelectorAll('label.control')].find((l) =>
+    l.textContent?.includes('Connectivity:'),
+  );
+  const slider = control!.querySelector('input[type="range"]') as HTMLInputElement;
+  await act(async () => setRange(slider, '3'));
+
+  expect(container.textContent).toContain('Link same cover');
+  expect(container.textContent).toContain('ignores the');
+  cleanup();
+});

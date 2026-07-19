@@ -17,6 +17,7 @@ import {
   toProblemFromUnits,
   type WorkingUnit,
 } from '../data/scenario.ts';
+import { buildConnectivity } from '../data/connectivity.ts';
 import {
   baseCostOf,
   COVERS,
@@ -164,6 +165,10 @@ export function App() {
   const [objective, setObjective] = useState<Objective>(() => initial.objective);
   const [budgetPct, setBudgetPct] = useState(() => initial.budgetPct);
   const [boundaryPenalty, setBoundaryPenalty] = useState(() => initial.boundaryPenalty);
+  const [connectivityPenalty, setConnectivityPenalty] = useState(
+    () => initial.connectivityPenalty,
+  );
+  const [sameCover, setSameCover] = useState(() => initial.sameCover);
   const [weights, setWeights] = useState<Record<string, number>>(() => initial.weights);
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -173,9 +178,24 @@ export function App() {
     [units],
   );
   const budget = Math.round((totalLandscapeCost * budgetPct) / 100);
+  // The connectivity matrix is only needed when the penalty is on. The same-cover
+  // (functional) boost reads each cell's cover, so rebuild when covers change.
+  const connectivity = useMemo(
+    () =>
+      connectivityPenalty > 0 ? buildConnectivity(units, { sameCover }) : undefined,
+    [connectivityPenalty, sameCover, units],
+  );
   const solveOptions = useMemo<SolveOptions>(
-    () => ({ objective, budget, weights, boundaryPenalty, neighbors: NEIGHBORS }),
-    [objective, budget, weights, boundaryPenalty],
+    () => ({
+      objective,
+      budget,
+      weights,
+      boundaryPenalty,
+      neighbors: NEIGHBORS,
+      connectivityPenalty,
+      ...(connectivity ? { connectivity } : {}),
+    }),
+    [objective, budget, weights, boundaryPenalty, connectivityPenalty, connectivity],
   );
   const solution = useMemo(
     () => solve(toProblemFromUnits(units, fractions), solveOptions),
@@ -253,13 +273,25 @@ export function App() {
       objective,
       budgetPct,
       boundaryPenalty,
+      connectivityPenalty,
+      sameCover,
       view,
       units,
     };
     const base = `${window.location.pathname}${window.location.search}`;
     const url = isDefaultState(state) ? base : `${base}#${encodeState(state)}`;
     window.history.replaceState(null, '', url);
-  }, [fractions, weights, objective, budgetPct, boundaryPenalty, view, units]);
+  }, [
+    fractions,
+    weights,
+    objective,
+    budgetPct,
+    boundaryPenalty,
+    connectivityPenalty,
+    sameCover,
+    view,
+    units,
+  ]);
 
   // Clear the pending "Link copied" timer if the app unmounts mid-feedback.
   useEffect(
@@ -600,6 +632,36 @@ export function App() {
                 />
               </label>
 
+              <label className="control">
+                <span className="control-label">
+                  Connectivity: {connectivityPenalty}
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={5}
+                  step={0.5}
+                  value={connectivityPenalty}
+                  onChange={(e) => setConnectivityPenalty(Number(e.target.value))}
+                />
+              </label>
+              {connectivityPenalty > 0 && (
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={sameCover}
+                    onChange={(e) => setSameCover(e.target.checked)}
+                  />
+                  Link same cover (functional connectivity)
+                </label>
+              )}
+              <p className="hint">
+                Connectivity rewards plans whose areas are linked across short gaps, not
+                only touching. Compactness is the special case of immediate adjacency.
+                Turn on &ldquo;link same cover&rdquo; to reward connecting like habitat
+                to like habitat.
+              </p>
+
               <div className="control">
                 <span className="control-label">Feature weights</span>
                 {SCENARIO.features.map((f) => (
@@ -811,6 +873,12 @@ export function App() {
                   {comparing ? 'Solving...' : 'Compute exact optimum'}
                 </button>
               </div>
+              {(boundaryPenalty > 0 || connectivityPenalty > 0) && (
+                <p className="hint">
+                  The exact optimum solves pure minimum-set: it ignores the compactness
+                  and connectivity penalties, which only steer the greedy heuristic.
+                </p>
+              )}
               {comparison === null ? (
                 <p className="hint">
                   Minimum-set only. Compares the greedy heuristic against the exact

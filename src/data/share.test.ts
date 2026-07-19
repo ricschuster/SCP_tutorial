@@ -15,6 +15,8 @@ function editedState(): ScenarioState {
   state.objective = 'max-coverage';
   state.budgetPct = 72;
   state.boundaryPenalty = 3.5;
+  state.connectivityPenalty = 2.5;
+  state.sameCover = true;
   // Edit a handful of units: repaint cover, and set both lock statuses.
   state.units[0] = applyCover(state.units[0]!, 'developed');
   state.units[1] = applyCover(state.units[1]!, 'water');
@@ -40,6 +42,8 @@ test('a fully edited state round-trips exactly', () => {
   expect(decoded!.objective).toBe('max-coverage');
   expect(decoded!.budgetPct).toBe(72);
   expect(decoded!.boundaryPenalty).toBe(3.5);
+  expect(decoded!.connectivityPenalty).toBe(2.5);
+  expect(decoded!.sameCover).toBe(true);
   expect(decoded!.units[0]!.cover).toBe('developed');
   expect(decoded!.units[1]!.cover).toBe('water');
   // Repaint re-derives amounts and cost from the new cover.
@@ -61,6 +65,29 @@ test('the active view round-trips and counts as non-default', () => {
   expect(decoded!.view).toBe('method');
   // The default view stays clean.
   expect(decodeState(encodeState(defaultState()))!.view).toBe('explore');
+});
+
+test('connectivity round-trips and counts as non-default', () => {
+  const state = defaultState();
+  state.connectivityPenalty = 4;
+  expect(isDefaultState(state)).toBe(false);
+  expect(decodeState(encodeState(state))!.connectivityPenalty).toBe(4);
+
+  // The same-cover boost alone is also non-default and round-trips.
+  const fn = defaultState();
+  fn.sameCover = true;
+  expect(isDefaultState(fn)).toBe(false);
+  expect(decodeState(encodeState(fn))!.sameCover).toBe(true);
+});
+
+test('a link without connectivity fields decodes to the defaults', () => {
+  // Simulate an older shared link that predates connectivity: encode a state that
+  // has no connectivity, then confirm the absent fields decode to 0 / false.
+  const older = defaultState();
+  older.boundaryPenalty = 2; // make it non-default so it actually encodes
+  const decoded = decodeState(encodeState(older));
+  expect(decoded!.connectivityPenalty).toBe(0);
+  expect(decoded!.sameCover).toBe(false);
 });
 
 test('an edited state is not treated as default', () => {
@@ -92,11 +119,13 @@ test('out-of-range values are clamped, unknown feature ids ignored', () => {
   state.fractions[SCENARIO.features[0]!.id] = 5; // above 1
   state.budgetPct = 999;
   state.boundaryPenalty = -4;
+  state.connectivityPenalty = 99;
   state.weights[SCENARIO.features[0]!.id] = 100;
   const decoded = decodeState(encodeState(state));
   expect(decoded).not.toBeNull();
   expect(decoded!.fractions[SCENARIO.features[0]!.id]).toBe(1);
   expect(decoded!.budgetPct).toBe(100);
   expect(decoded!.boundaryPenalty).toBe(0);
+  expect(decoded!.connectivityPenalty).toBe(5);
   expect(decoded!.weights[SCENARIO.features[0]!.id]).toBe(3);
 });

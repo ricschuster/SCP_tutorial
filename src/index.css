@@ -536,6 +536,15 @@ body {
   cursor: pointer;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 .irrep-scale {
   display: flex;
   align-items: center;

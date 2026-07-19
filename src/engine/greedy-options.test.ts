@@ -66,6 +66,36 @@ test('boundary penalty prefers an adjacent unit over a scattered one', () => {
   expect(compact.selected).toEqual([0, 2]);
 });
 
+test('connectivity penalty prefers a connected unit over a disconnected one', () => {
+  // Units 0 and 2 are connected (strength 1); unit 1 is isolated. Equal amount
+  // and cost, so without connectivity the tie breaks to the lower id.
+  const problem: Problem = {
+    units: [unit(0, 1, { A: 3 }), unit(1, 1, { A: 3 }), unit(2, 1, { A: 3 })],
+    features: [feature('A', 6)],
+  };
+  const connectivity = new Map<number, readonly { to: number; strength: number }[]>([
+    [0, [{ to: 2, strength: 1 }]],
+    [1, []],
+    [2, [{ to: 0, strength: 1 }]],
+  ]);
+
+  // No penalty: unit 0 first, then the tie breaks to the lower id (unit 1).
+  expect(solve(problem).selected).toEqual([0, 1]);
+
+  // With a connectivity penalty: after unit 0, unit 2 is rewarded for its link to
+  // the chosen set, so it beats the isolated unit 1 despite the higher id.
+  const connected = solve(problem, { connectivityPenalty: 2, connectivity });
+  expect(connected.selected).toEqual([0, 2]);
+});
+
+test('connectivity penalty without a matrix has no effect', () => {
+  const problem: Problem = {
+    units: [unit(0, 1, { A: 3 }), unit(1, 1, { A: 3 }), unit(2, 1, { A: 3 })],
+    features: [feature('A', 6)],
+  };
+  expect(solve(problem, { connectivityPenalty: 5 }).selected).toEqual([0, 1]);
+});
+
 test('weights do not change the min-set requirement, only the path', () => {
   const problem: Problem = {
     units: [unit(0, 1, { A: 5 }), unit(1, 1, { B: 5 })],
