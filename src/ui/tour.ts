@@ -134,7 +134,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: 'exact',
     title: 'Greedy vs the true optimum',
-    body: 'The solver is a fast greedy heuristic. Click "Compute exact optimum" to run the exact solver for the same targets and see how close greedy gets and where the two plans differ.',
+    body: 'The solver is a fast greedy heuristic. Click "Compute near-optimal optimum" to solve the same targets to within 1% of optimal and see how close greedy gets and where the two plans differ.',
     region: 'compare',
     tab: 'method',
   },

@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted
+Superseded by `2026-07-19_exact-solver-highs-at-scale.md`. The glpk.js choice held
+at 3 features but not at 8: the "HiGHS remains the documented fallback if a future
+need (larger instances ...) outgrows GLPK" clause in Consequences came due, and the
+solver moved to HiGHS. The context and benchmark below remain the record of why
+glpk.js was chosen first.
 
 ## Context
 

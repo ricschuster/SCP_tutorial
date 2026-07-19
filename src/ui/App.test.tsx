@@ -59,14 +59,14 @@ test('tabs switch between Explore and Method content', async () => {
   const { container, cleanup } = await render();
   // Explore is the default: edit tools shown, advanced content hidden.
   expect(container.textContent).toContain('Edit tools');
-  expect(container.textContent).not.toContain('Greedy vs exact optimum');
+  expect(container.textContent).not.toContain('Greedy vs near-optimal optimum');
 
   const methodTab = [...container.querySelectorAll('button')].find(
     (b) => b.textContent === 'Method (advanced)',
   );
   await act(async () => methodTab!.click());
 
-  expect(container.textContent).toContain('Greedy vs exact optimum');
+  expect(container.textContent).toContain('Greedy vs near-optimal optimum');
   expect(container.textContent).not.toContain('Edit tools');
   cleanup();
 });
