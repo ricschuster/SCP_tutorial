@@ -261,10 +261,10 @@ export function App() {
   // the view here (in the handler) rather than in an effect keeps the tab switch
   // an explicit action, not a render side effect.
   const goToStep = (step: number | null) => {
-    if (step !== null) {
-      const s = TOUR_STEPS[step];
-      if (s) setView(regionTab(s.region));
-    }
+    const s = step === null ? null : (TOUR_STEPS[step] ?? null);
+    if (s) setView(regionTab(s.region));
+    // Open (or clear) the mechanics inspector for steps that call one out.
+    setInspected(s?.inspect ?? null);
     setTourStep(step);
   };
   const nextStep = () => {
@@ -786,8 +786,8 @@ export function App() {
                 </button>
               </div>
               <p className="hint">
-                Habitat quality here: {inspectedExplain.quality.toFixed(2)} (forest is
-                not equally good forest everywhere).
+                Habitat quality here: {inspectedExplain.quality.toFixed(2)} (quality
+                varies across the map, so cells of the same cover differ).
               </p>
               <table className="inspect-table">
                 <tbody>
