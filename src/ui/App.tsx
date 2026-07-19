@@ -46,6 +46,7 @@ import {
 import { GridView } from './GridView.tsx';
 import { CostTargetCurve } from './CostTargetCurve.tsx';
 import { TourPanel } from './TourPanel.tsx';
+import { AboutPanel } from './AboutPanel.tsx';
 import { SHORT_TOUR_LENGTH, TOUR_STEPS, type TourRegion } from './tour.ts';
 import { mix, type Rgb } from './color.ts';
 
@@ -190,6 +191,7 @@ export function App() {
   const [sameCover, setSameCover] = useState(() => initial.sameCover);
   const [weights, setWeights] = useState<Record<string, number>>(() => initial.weights);
   const [copied, setCopied] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const totalLandscapeCost = useMemo(
@@ -634,6 +636,14 @@ export function App() {
             title="Clear every change and return to the default scenario"
           >
             Start over
+          </button>
+          <button
+            type="button"
+            className="tour-start secondary"
+            onClick={() => setShowAbout(true)}
+            title="What this app is and what it teaches"
+          >
+            About
           </button>
           <button
             type="button"
@@ -1279,6 +1289,16 @@ export function App() {
           {...(!fullTour && tourStep === SHORT_TOUR_LENGTH - 1
             ? { onContinueFull: continueFullTour }
             : {})}
+        />
+      )}
+
+      {showAbout && (
+        <AboutPanel
+          onClose={() => setShowAbout(false)}
+          onStartTour={() => {
+            setShowAbout(false);
+            startTour();
+          }}
         />
       )}
     </main>
