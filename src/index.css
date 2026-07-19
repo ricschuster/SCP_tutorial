@@ -392,26 +392,41 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.attainments {
-  display: flex;
-  flex: 1 1 16rem;
-  min-width: 14rem;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.attain {
-  display: grid;
-  grid-template-columns: 9rem 1fr auto;
-  align-items: center;
-  gap: 0.5rem;
+.feature-table {
+  flex: 1 1 20rem;
+  min-width: 16rem;
+  border-collapse: collapse;
   font-size: 0.82rem;
 }
 
-.attain-label {
-  overflow: hidden;
+.feature-table thead th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 0.5rem 0.3rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.feature-table tbody th,
+.feature-table tbody td {
+  padding: 0.25rem 0.5rem 0.25rem 0;
+  vertical-align: middle;
+}
+
+.feat-name {
+  text-align: left;
+  font-weight: 400;
   white-space: nowrap;
-  text-overflow: ellipsis;
+}
+
+.feat-num {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.feat-bar {
+  width: 40%;
 }
 
 .bar {
@@ -427,9 +442,20 @@ body {
   height: 100%;
 }
 
-.attain-num {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
+.spotlight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.spotlight-select {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.spotlight-select .hint {
+  margin: 0;
 }
 
 .warn {

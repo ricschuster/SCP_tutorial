@@ -97,8 +97,9 @@ test('an edited state is not treated as default', () => {
 });
 
 test('the default token is compact (unedited units cost nothing)', () => {
-  // The whole default landscape should serialize without listing 100 units.
-  expect(encodeState(defaultState()).length).toBeLessThan(200);
+  // The whole default landscape should serialize without listing its 900 units:
+  // the token holds only the per-feature target/weight maps, not any unit diff.
+  expect(encodeState(defaultState()).length).toBeLessThan(500);
 });
 
 test('malformed, empty, and unknown-version tokens decode to null', () => {

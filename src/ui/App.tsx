@@ -9,6 +9,8 @@ import {
 import { compareSolutions, type SolutionComparison } from '../engine/compare.ts';
 import {
   applyCover,
+  combinedHabitatMaxOf,
+  combinedHabitatOf,
   costRangeOf,
   featureMaxOf,
   makeWorkingUnits,
@@ -39,9 +41,12 @@ import { GridView } from './GridView.tsx';
 import { CostTargetCurve } from './CostTargetCurve.tsx';
 import { TourPanel } from './TourPanel.tsx';
 import { TOUR_STEPS, type TourRegion } from './tour.ts';
-import { hexToRgb, mix, type Rgb } from './color.ts';
+import { mix, type Rgb } from './color.ts';
 
-const FEATURE_LO: Rgb = [245, 245, 245];
+// Habitat scalar ramp (single hue for every habitat map, so feature identity is
+// never carried by map colour). Distinct enough from the solid priority green.
+const HAB_LO: Rgb = [245, 245, 245];
+const HAB_HI: Rgb = [21, 87, 36];
 const COST_LO: Rgb = [235, 237, 232];
 const COST_HI: Rgb = [60, 60, 60];
 // Irreplaceability heat: a light-to-warm sequential ramp (ColorBrewer OrRd),
@@ -160,6 +165,8 @@ export function App() {
   });
   const [inspected, setInspected] = useState<number | null>(null);
   const [showIrrep, setShowIrrep] = useState(false);
+  // Which species the habitat spotlight map shows (single-hue scalar surface).
+  const [spotlight, setSpotlight] = useState(FIRST_FEATURE);
   const [view, setView] = useState<AppView>(() => initial.view);
   const [curveFocus, setCurveFocus] = useState(FIRST_FEATURE);
   const [objective, setObjective] = useState<Objective>(() => initial.objective);
@@ -356,11 +363,18 @@ export function App() {
     return mix(COST_LO, COST_HI, t);
   };
 
-  const featureFill = (featureId: string) => {
-    const to = hexToRgb(featureColor(featureId));
+  // A single-hue habitat surface for one species (the spotlight map).
+  const habitatFill = (featureId: string) => {
     const max = featureMaxOf(units, featureId) || 1;
     return (id: number) =>
-      mix(FEATURE_LO, to, (unitsById.get(id)?.amounts[featureId] ?? 0) / max);
+      mix(HAB_LO, HAB_HI, (unitsById.get(id)?.amounts[featureId] ?? 0) / max);
+  };
+
+  // The combined-habitat surface: every species' habitat summed, one scalar ramp.
+  const combinedMax = useMemo(() => combinedHabitatMaxOf(units) || 1, [units]);
+  const combinedFill = (id: number): string => {
+    const unit = unitsById.get(id);
+    return mix(HAB_LO, HAB_HI, unit ? combinedHabitatOf(unit) / combinedMax : 0);
   };
 
   const coverFill = (id: number): string => {
@@ -707,30 +721,45 @@ export function App() {
                 </span>
               </div>
             )}
-            <div className="attainments">
-              {solution.attainment.map((a) => {
-                const pct = a.target > 0 ? Math.min(1, a.represented / a.target) : 1;
-                return (
-                  <div className="attain" key={a.featureId}>
-                    <span className="attain-label">
-                      {featureName(a.featureId)} {a.met ? '✓' : ''}
-                    </span>
-                    <span className="bar">
-                      <span
-                        className="bar-fill"
-                        style={{
-                          width: `${Math.round(pct * 100)}%`,
-                          background: featureColor(a.featureId),
-                        }}
-                      />
-                    </span>
-                    <span className="attain-num">
-                      {Math.round(a.represented)} / {Math.round(a.target)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <table className="feature-table">
+              <thead>
+                <tr>
+                  <th scope="col">Species</th>
+                  <th scope="col">Represented</th>
+                  <th scope="col">Progress to target</th>
+                </tr>
+              </thead>
+              <tbody>
+                {solution.attainment.map((a) => {
+                  const pct = a.target > 0 ? Math.min(1, a.represented / a.target) : 1;
+                  return (
+                    <tr key={a.featureId}>
+                      <th scope="row" className="feat-name">
+                        <span
+                          className="swatch"
+                          style={{ background: featureColor(a.featureId) }}
+                        />
+                        {featureName(a.featureId)} {a.met ? '✓' : ''}
+                      </th>
+                      <td className="feat-num">
+                        {Math.round(a.represented)} / {Math.round(a.target)}
+                      </td>
+                      <td className="feat-bar">
+                        <span className="bar">
+                          <span
+                            className="bar-fill"
+                            style={{
+                              width: `${Math.round(pct * 100)}%`,
+                              background: featureColor(a.featureId),
+                            }}
+                          />
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
             {objective === 'min-set' && !solution.feasible && (
               <p className="warn">
                 Targets cannot be met (too much locked out or too little habitat):{' '}
@@ -791,8 +820,10 @@ export function App() {
               >
                 <h2>Derived from land cover</h2>
                 <p className="hint">
-                  Cost and each species&apos; habitat are computed from the cover you
-                  paint, not set directly.
+                  Cost and habitat are computed from the cover you paint, not set
+                  directly. Every habitat map uses one scale (darker = more), so the
+                  display stays readable with many species. Pick a species to spotlight
+                  its habitat.
                 </p>
                 <div className="maps">
                   <GridView
@@ -802,16 +833,35 @@ export function App() {
                     onInspect={setInspected}
                     inspectedId={inspected}
                   />
-                  {SCENARIO.features.map((f) => (
+                  <GridView
+                    gridSize={SCENARIO.gridSize}
+                    caption="Combined habitat (all species, darker = more)"
+                    fill={combinedFill}
+                    onInspect={setInspected}
+                    inspectedId={inspected}
+                  />
+                  <div className="spotlight">
+                    <label className="spotlight-select">
+                      <span className="hint">View species habitat:</span>
+                      <select
+                        value={spotlight}
+                        onChange={(e) => setSpotlight(e.target.value)}
+                      >
+                        {SCENARIO.features.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <GridView
-                      key={f.id}
                       gridSize={SCENARIO.gridSize}
-                      caption={`${f.name} habitat (darker = more)`}
-                      fill={featureFill(f.id)}
+                      caption={`${featureName(spotlight)} habitat (darker = more)`}
+                      fill={habitatFill(spotlight)}
                       onInspect={setInspected}
                       inspectedId={inspected}
                     />
-                  ))}
+                  </div>
                 </div>
               </div>
             </>

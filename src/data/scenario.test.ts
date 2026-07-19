@@ -1,5 +1,7 @@
 import { solve } from '../engine/index.ts';
 import {
+  combinedHabitatMaxOf,
+  combinedHabitatOf,
   COST_RANGE,
   featureMax,
   featureTotal,
@@ -26,16 +28,30 @@ test('every feature is present somewhere, with overlap and empty areas', () => {
   expect(empty.length).toBeGreaterThan(0);
 });
 
+// Targets of 30% for every feature in the scenario.
+function evenTargets(fraction: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const f of SCENARIO.features) out[f.id] = fraction;
+  return out;
+}
+
 test('toProblem sets each target as the fraction of the feature total', () => {
-  const problem = toProblem({ forest: 0.3, wetland: 0.3, grassland: 0.3 });
+  const problem = toProblem(evenTargets(0.3));
   for (const f of problem.features) {
     expect(f.target).toBeCloseTo(featureTotal(f.id) * 0.3);
   }
 });
 
 test('the default scenario solves feasibly at 30% targets', () => {
-  const solution = solve(toProblem({ forest: 0.3, wetland: 0.3, grassland: 0.3 }));
+  const solution = solve(toProblem(evenTargets(0.3)));
   expect(solution.feasible).toBe(true);
   expect(solution.selected.length).toBeGreaterThan(0);
   expect(solution.attainment.every((a) => a.met)).toBe(true);
+});
+
+test('combined habitat is the sum of a unit amounts and has a positive max', () => {
+  const withTwo = SCENARIO.units.find((u) => Object.keys(u.amounts).length >= 2)!;
+  const expected = Object.values(withTwo.amounts).reduce((s, v) => s + v, 0);
+  expect(combinedHabitatOf(withTwo)).toBeCloseTo(expected);
+  expect(combinedHabitatMaxOf(SCENARIO.units)).toBeGreaterThan(0);
 });

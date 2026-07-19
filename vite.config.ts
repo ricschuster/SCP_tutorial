@@ -15,6 +15,12 @@ export default defineConfig(({ command }) => ({
     // Under Vitest there is no browser worker, so use the synchronous Node build
     // instead; both expose the same factory and model shape.
     alias: { 'glpk.js': 'glpk.js/node' },
+    // The UI integration tests mount the full app and re-solve the 900-unit,
+    // 8-feature landscape on mount and on each interaction (tab switch, control
+    // change). That greedy solve plus jsdom rendering is heavy on slower CI
+    // runners, so allow more than the 5s default. Not a rendering cost (canvas
+    // fixed that); it is the solve/mount work scaling with units x features.
+    testTimeout: 20000,
     coverage: {
       provider: 'v8',
       // The pure prioritization engine is where correctness lives; hold it to a
