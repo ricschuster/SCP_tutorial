@@ -214,7 +214,14 @@ export function App() {
 
   useEffect(() => {
     if (currentStep === null) return;
-    const el = rootRef.current?.querySelector(`[data-region="${currentStep.region}"]`);
+    // Steps that call out a cell teach through the inspector, so bring that into
+    // view (not just the maps region), or the arithmetic the step describes is
+    // below the fold on a normal screen.
+    const selector =
+      currentStep.inspect !== undefined
+        ? '.inspector'
+        : `[data-region="${currentStep.region}"]`;
+    const el = rootRef.current?.querySelector(selector);
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [currentStep]);
 
@@ -767,7 +774,13 @@ export function App() {
           )}
 
           {inspectedUnit && inspectedExplain && (
-            <div className="panel inspector">
+            <div
+              className={`panel inspector${
+                tourActive && currentStep?.inspect !== undefined
+                  ? ' tour-highlight'
+                  : ''
+              }`}
+            >
               <div className="inspector-head">
                 <h2>
                   Cell ({inspectedUnit.row}, {inspectedUnit.col})
