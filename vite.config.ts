@@ -11,10 +11,9 @@ export default defineConfig(({ command }) => ({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
-    // The exact solver imports the default `glpk.js` (browser worker) build.
-    // Under Vitest there is no browser worker, so use the synchronous Node build
-    // instead; both expose the same factory and model shape.
-    alias: { 'glpk.js': 'glpk.js/node' },
+    // The exact solver runs HiGHS in a Web Worker in the browser. jsdom has no
+    // Worker, so under Vitest runHighs falls back to solving synchronously in
+    // process (highs-sync.ts); no alias is needed.
     // The UI integration tests mount the full app and re-solve the 900-unit,
     // 8-feature landscape on mount and on each interaction (tab switch, control
     // change). That greedy solve plus jsdom rendering is heavy on slower CI
@@ -26,6 +25,11 @@ export default defineConfig(({ command }) => ({
       // The pure prioritization engine is where correctness lives; hold it to a
       // bar. UI is covered by lighter smoke tests.
       include: ['src/engine/**/*.ts'],
+      // The HiGHS Web Worker and its main-thread client are browser-only glue:
+      // jsdom has no Worker, so tests take the synchronous path and never load
+      // them. They are verified in a real browser instead (see the exact-solver
+      // ADR), so keep them out of the unit-coverage numbers.
+      exclude: ['src/engine/highs.worker.ts', 'src/engine/highs-worker-client.ts'],
       thresholds: {
         statements: 80,
         branches: 80,

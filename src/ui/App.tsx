@@ -960,26 +960,28 @@ export function App() {
           {view === 'method' && (
             <div className={`panel compare${tourHi('compare')}`} data-region="compare">
               <div className="compare-head">
-                <h2>Greedy vs exact optimum</h2>
+                <h2>Greedy vs near-optimal optimum</h2>
                 <button
                   type="button"
                   className="tool"
                   onClick={runCompare}
                   disabled={comparing}
                 >
-                  {comparing ? 'Solving...' : 'Compute exact optimum'}
+                  {comparing ? 'Solving...' : 'Compute near-optimal optimum'}
                 </button>
               </div>
               {(boundaryPenalty > 0 || connectivityPenalty > 0) && (
                 <p className="hint">
-                  The exact optimum solves pure minimum-set: it ignores the compactness
-                  and connectivity penalties, which only steer the greedy heuristic.
+                  The near-optimal optimum solves pure minimum-set: it ignores the
+                  compactness and connectivity penalties, which only steer the greedy
+                  heuristic.
                 </p>
               )}
               {comparison === null ? (
                 <p className="hint">
-                  Minimum-set only. Compares the greedy heuristic against the exact
-                  optimum for the current landscape and targets.
+                  Minimum-set only. Compares the greedy heuristic against a near-optimal
+                  optimum (solved to within 1% of the true optimum) for the current
+                  landscape and targets.
                 </p>
               ) : comparison.exact.feasible ? (
                 <div className="compare-body">
@@ -989,7 +991,7 @@ export function App() {
                       <span className="stat-value">{comparison.cmp.greedyCost}</span>
                     </div>
                     <div className="stat">
-                      <span className="stat-label">Exact cost</span>
+                      <span className="stat-label">Near-optimal cost</span>
                       <span className="stat-value">{comparison.cmp.exactCost}</span>
                     </div>
                     <div className="stat">
@@ -1002,15 +1004,15 @@ export function App() {
                   <div className="maps">
                     <GridView
                       gridSize={SCENARIO.gridSize}
-                      caption="Both green; greedy-only amber; exact-only blue"
+                      caption="Both green; greedy-only amber; near-optimal-only blue"
                       fill={diffFill(comparison.cmp)}
                     />
                   </div>
                 </div>
               ) : (
                 <p className="info">
-                  The current targets are infeasible, so there is no exact optimum to
-                  compare.
+                  The current targets are infeasible, so there is no near-optimal
+                  optimum to compare.
                 </p>
               )}
             </div>

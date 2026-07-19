@@ -1,28 +1,31 @@
-import GLPK, { type LP } from 'glpk.js';
 import { amountInUnit } from './amounts.ts';
 import { attainmentFor, totalCost } from './attainment.ts';
 import { checkFeasibility } from './feasibility.ts';
+import { runHighs } from './highs-runner.ts';
 import type { Problem, Solution } from './types.ts';
 
-// Exact minimum-set optimum via mixed-integer programming, using GLPK compiled
-// to WebAssembly (glpk.js). Bounded to small instances like the teaching grid.
-// Compare against the greedy heuristic to see how close greedy gets. See the
-// solver ADR. This module pulls in the solver, so load it lazily (dynamic
-// import from the caller) to keep it out of the initial bundle.
+// Near-optimal minimum-set solution via mixed-integer programming, using HiGHS
+// compiled to WebAssembly. HiGHS stops at a small proven optimality gap
+// (MIP_REL_GAP), so the solve stays interactive on the teaching grid while the
+// result is provably within that gap of the true optimum. Compare against the
+// greedy heuristic to see how close greedy gets. See the two solver ADRs.
 //
-// In the browser the default `glpk.js` export runs the solver in its own web
-// worker (so the solve stays off the main thread); under Vitest it is aliased to
-// the synchronous `glpk.js/node` build (see vite.config.ts). Both expose the
-// same factory and model shape, and `await` works for either return type.
+// In the browser the solve runs in a Web Worker (off the main thread); under
+// Vitest it runs synchronously in-process. Both go through runHighs, which picks
+// the path. This module is loaded lazily (dynamic import from the caller) so the
+// solver wasm stays out of the initial bundle.
+//
+// GLPK (the previous engine) proved optimality too slowly once the landscape
+// grew to 8 features: ~10s, hitting its time limit rather than proving optimum.
+// HiGHS at a 1% gap stays well under ~1.2s across the target range. See the
+// exact-solver-revisit ADR for the benchmark behind the switch.
 
-type Var = { name: string; coef: number };
-
-// A single lazily-created GLPK instance, reused across solves.
-let glpkPromise: ReturnType<typeof GLPK> | null = null;
-function getGlpk(): ReturnType<typeof GLPK> {
-  if (glpkPromise === null) glpkPromise = GLPK();
-  return glpkPromise;
-}
+// Stop once the incumbent is provably within 1% of optimal. Keeps the solve fast
+// across the whole target range; the UI labels the result "near-optimal".
+const MIP_REL_GAP = 0.01;
+// Safety cap: a pathological instance degrades to the incumbent instead of
+// hanging. Real solves finish far inside this at the 1% gap.
+const TIME_LIMIT_SEC = 10;
 
 export async function solveExact(problem: Problem): Promise<Solution> {
   const feasibility = checkFeasibility(problem);
@@ -36,56 +39,16 @@ export async function solveExact(problem: Problem): Promise<Solution> {
     };
   }
 
-  const glpk = await getGlpk();
+  const lp = buildMinSetLp(problem);
+  const result = await runHighs(lp, {
+    mipRelGap: MIP_REL_GAP,
+    timeLimitSec: TIME_LIMIT_SEC,
+  });
 
-  const objectiveVars: Var[] = [];
-  const binaries: string[] = [];
-  const featureVars = new Map<string, Var[]>();
-  for (const feature of problem.features) featureVars.set(feature.id, []);
-  const lockedInNames: string[] = [];
-
-  for (const unit of problem.units) {
-    if (unit.status === 'locked-out') continue; // never selectable
-    const name = `u${unit.id}`;
-    objectiveVars.push({ name, coef: unit.cost });
-    binaries.push(name);
-    for (const feature of problem.features) {
-      const amount = amountInUnit(unit, feature.id);
-      if (amount !== 0) featureVars.get(feature.id)?.push({ name, coef: amount });
-    }
-    if (unit.status === 'locked-in') lockedInNames.push(name);
-  }
-
-  // sum over units of amount_if * x_i >= target_f
-  const subjectTo: LP['subjectTo'] = problem.features.map((feature) => ({
-    name: `feat_${feature.id}`,
-    vars: featureVars.get(feature.id) ?? [],
-    bnds: { type: glpk.GLP_LO, lb: feature.target, ub: 0 },
-  }));
-  // Force each locked-in unit to 1 (x_i = 1).
-  for (const name of lockedInNames) {
-    subjectTo.push({
-      name: `lock_${name}`,
-      vars: [{ name, coef: 1 }],
-      bnds: { type: glpk.GLP_FX, lb: 1, ub: 1 },
-    });
-  }
-
-  const result = await glpk.solve(
-    {
-      name: 'minset',
-      objective: { direction: glpk.GLP_MIN, name: 'cost', vars: objectiveVars },
-      subjectTo,
-      binaries,
-    },
-    { msglev: glpk.GLP_MSG_OFF, presol: true, tmlim: 10, mipgap: 0 },
-  );
-
-  const values = result.result.vars;
   const selected: number[] = [];
   for (const unit of problem.units) {
     if (unit.status === 'locked-out') continue;
-    const value = values[`u${unit.id}`];
+    const value = result.columns[`u${unit.id}`];
     if (typeof value === 'number' && value > 0.5) selected.push(unit.id);
   }
 
@@ -96,4 +59,55 @@ export async function solveExact(problem: Problem): Promise<Solution> {
     attainment: attainmentFor(problem, selected),
     shortfallFeatures: [],
   };
+}
+
+// Build the minimum-set MILP as a CPLEX-LP string for HiGHS: minimise total cost
+// subject to each feature's summed coverage meeting its target, with locked-in
+// units fixed to 1 and locked-out units omitted entirely. Pure and deterministic;
+// all coefficients (costs, amounts) are non-negative, so terms join with " + ".
+function buildMinSetLp(problem: Problem): string {
+  const objectiveTerms: string[] = [];
+  const binaries: string[] = [];
+  const lockedIn: string[] = [];
+  const featureTerms = new Map<string, string[]>();
+  for (const feature of problem.features) featureTerms.set(feature.id, []);
+
+  for (const unit of problem.units) {
+    if (unit.status === 'locked-out') continue; // never selectable
+    const name = `u${unit.id}`;
+    objectiveTerms.push(term(unit.cost, name));
+    binaries.push(name);
+    for (const feature of problem.features) {
+      const amount = amountInUnit(unit, feature.id);
+      if (amount !== 0) featureTerms.get(feature.id)?.push(term(amount, name));
+    }
+    if (unit.status === 'locked-in') lockedIn.push(name);
+  }
+
+  const constraints: string[] = [];
+  // sum over units of amount_if * x_i >= target_f. checkFeasibility has already
+  // ruled out a feature no selectable unit supplies, so each list is non-empty.
+  for (const feature of problem.features) {
+    const terms = featureTerms.get(feature.id) ?? [];
+    constraints.push(`  feat_${feature.id}: ${terms.join(' + ')} >= ${feature.target}`);
+  }
+  // Force each locked-in unit to 1.
+  for (const name of lockedIn) {
+    constraints.push(`  lock_${name}: ${name} = 1`);
+  }
+
+  return [
+    'Minimize',
+    ` cost: ${objectiveTerms.join(' + ')}`,
+    'Subject To',
+    ...constraints,
+    'Binary',
+    ` ${binaries.join(' ')}`,
+    'End',
+  ].join('\n');
+}
+
+// One LP term: a coefficient and a variable name, e.g. "3 u17".
+function term(coef: number, name: string): string {
+  return `${coef} ${name}`;
 }
