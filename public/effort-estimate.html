@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Solo Build-Effort Estimate — SCP Tutorial</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+      img {
+        max-width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <style>
+      :root {
+        color-scheme: light dark;
+
+        /* Neutrals with a slight evergreen bias */
+        --bg: #f4f7f2;
+        --surface: #fcfdfb;
+        --surface-2: #eff3ec;
+        --hairline: #e0e7db;
+        --hairline-strong: #cbd5c3;
+
+        --ink: #17271e;
+        --ink-2: #46564b;
+        --ink-3: #798779;
+
+        /* Conservation greens */
+        --accent: #1b7a4d; /* readable green for text/emphasis */
+        --bar: #2e9e67; /* range-bar fill */
+        --bar-soft: #b7e0c9; /* optimistic end / soft fill */
+        --ochre: #a9722b; /* warm chrome accent only (eyebrows, rules) */
+
+        --shadow: 0 1px 2px rgba(20, 40, 30, 0.05), 0 10px 30px rgba(20, 40, 30, 0.06);
+
+        --serif:
+          'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia,
+          serif;
+        --sans:
+          system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+          sans-serif;
+        --mono:
+          'SF Mono', ui-monospace, 'Cascadia Code', 'Roboto Mono', Menlo, Consolas,
+          monospace;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #10160f;
+          --surface: #18211789;
+          --surface-2: #1b241a;
+          --hairline: #2a3529;
+          --hairline-strong: #3a473859;
+
+          --ink: #e9f1e6;
+          --ink-2: #aebcad;
+          --ink-3: #7e8d7e;
+
+          --accent: #62cc90;
+          --bar: #40b378;
+          --bar-soft: #244d38;
+          --ochre: #ce9a54;
+
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 34px rgba(0, 0, 0, 0.4);
+        }
+      }
+      /* Explicit toggle overrides (must beat the media query in both directions) */
+      :root[data-theme='light'] {
+        --bg: #f4f7f2;
+        --surface: #fcfdfb;
+        --surface-2: #eff3ec;
+        --hairline: #e0e7db;
+        --hairline-strong: #cbd5c3;
+        --ink: #17271e;
+        --ink-2: #46564b;
+        --ink-3: #798779;
+        --accent: #1b7a4d;
+        --bar: #2e9e67;
+        --bar-soft: #b7e0c9;
+        --ochre: #a9722b;
+        --shadow: 0 1px 2px rgba(20, 40, 30, 0.05), 0 10px 30px rgba(20, 40, 30, 0.06);
+      }
+      :root[data-theme='dark'] {
+        --bg: #10160f;
+        --surface: #182117e0;
+        --surface-2: #1b241a;
+        --hairline: #2a3529;
+        --hairline-strong: #3a4738a0;
+        --ink: #e9f1e6;
+        --ink-2: #aebcad;
+        --ink-3: #7e8d7e;
+        --accent: #62cc90;
+        --bar: #40b378;
+        --bar-soft: #244d38;
+        --ochre: #ce9a54;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 34px rgba(0, 0, 0, 0.4);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(
+            1200px 500px at 100% -10%,
+            color-mix(in oklab, var(--accent) 8%, transparent),
+            transparent 60%
+          ),
+          var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      .wrap {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: clamp(28px, 5vw, 64px) clamp(18px, 4vw, 40px) 72px;
+      }
+
+      /* ---- Header ---- */
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--ochre);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 20px;
+      }
+      .eyebrow::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(90deg, var(--hairline-strong), transparent);
+      }
+
+      h1 {
+        font-family: var(--serif);
+        font-weight: 600;
+        font-size: clamp(30px, 5.4vw, 50px);
+        line-height: 1.06;
+        letter-spacing: -0.01em;
+        text-wrap: balance;
+        margin: 0 0 18px;
+      }
+      h1 em {
+        font-style: italic;
+        color: var(--accent);
+      }
+
+      .lede {
+        font-size: clamp(16px, 2.1vw, 19px);
+        color: var(--ink-2);
+        max-width: 62ch;
+        margin: 0 0 8px;
+      }
+      .lede strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      /* ---- Scope strip ---- */
+      .scope {
+        margin: 40px 0 8px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 1px;
+        background: var(--hairline);
+        border: 1px solid var(--hairline);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      .scope .cell {
+        background: var(--surface);
+        padding: 16px 16px 14px;
+      }
+      .scope .num {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        font-size: clamp(20px, 3vw, 26px);
+        font-weight: 600;
+        color: var(--ink);
+        letter-spacing: -0.02em;
+      }
+      .scope .num .u {
+        font-size: 0.6em;
+        color: var(--ink-3);
+        font-weight: 500;
+        margin-left: 2px;
+      }
+      .scope .lbl {
+        font-size: 12px;
+        color: var(--ink-3);
+        margin-top: 4px;
+        line-height: 1.35;
+      }
+      .scope .cell.hi .num {
+        color: var(--accent);
+      }
+
+      .scope-note {
+        font-size: 12.5px;
+        color: var(--ink-3);
+        margin: 10px 2px 0;
+      }
+
+      /* ---- Section heading ---- */
+      .sec-h {
+        font-family: var(--serif);
+        font-weight: 600;
+        font-size: clamp(21px, 3.2vw, 27px);
+        letter-spacing: -0.01em;
+        margin: 56px 0 6px;
+        text-wrap: balance;
+      }
+      .sec-sub {
+        color: var(--ink-2);
+        font-size: 15px;
+        margin: 0 0 26px;
+        max-width: 60ch;
+      }
+
+      /* ---- Chart ---- */
+      .chart {
+        background: var(--surface);
+        border: 1px solid var(--hairline);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 26px clamp(18px, 3vw, 30px) 20px;
+      }
+      .chart-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink-2);
+        margin: 0 0 22px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .chart-title .axis-unit {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--ink-3);
+        font-weight: 500;
+        letter-spacing: 0.04em;
+      }
+
+      .plot {
+        position: relative;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 168px 1fr;
+        align-items: stretch;
+        gap: 14px;
+        min-height: 62px;
+      }
+      .row + .row {
+        border-top: 1px dashed var(--hairline);
+      }
+      .rlabel {
+        padding: 12px 0 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .rlabel .pid {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        color: var(--ink-3);
+        text-transform: uppercase;
+      }
+      .rlabel .pname {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ink);
+        line-height: 1.25;
+        margin-top: 2px;
+      }
+      .rlabel .pknow {
+        font-size: 11.5px;
+        color: var(--ink-3);
+        margin-top: 3px;
+      }
+
+      .track {
+        position: relative;
+        align-self: center;
+        height: 100%;
+        min-height: 62px;
+      }
+
+      /* gridlines live in the track area, spanning all rows via the overlay */
+      .gridlines {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .gridlines .gl {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: var(--hairline);
+      }
+      .gridlines .gl.zero {
+        background: var(--hairline-strong);
+      }
+
+      /* AI reference line */
+      .refline {
+        position: absolute;
+        top: -6px;
+        bottom: -6px;
+        width: 0;
+        border-left: 2px dashed var(--ochre);
+        z-index: 4;
+        pointer-events: none;
+      }
+      .reftag {
+        position: absolute;
+        z-index: 5;
+        font-family: var(--mono);
+        font-size: 10.5px;
+        letter-spacing: 0.02em;
+        color: var(--ochre);
+        font-weight: 600;
+        white-space: nowrap;
+        background: color-mix(in oklab, var(--surface) 86%, transparent);
+        padding: 2px 6px;
+        border-radius: 6px;
+        line-height: 1.2;
+      }
+
+      .bar {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        height: 22px;
+        background: linear-gradient(
+          90deg,
+          color-mix(in oklab, var(--bar) 55%, var(--surface)),
+          var(--bar)
+        );
+        border-radius: 5px;
+        z-index: 3;
+        box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bar) 55%, transparent);
+        cursor: default;
+        transition: filter 0.15s ease;
+      }
+      .bar:hover {
+        filter: brightness(1.06);
+      }
+      .bar.open {
+        /* open-ended (P3): hatched leading edge + arrow feel */
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        -webkit-mask: linear-gradient(90deg, #000 82%, transparent);
+        mask: linear-gradient(90deg, #000 82%, transparent);
+      }
+      .bar .vlabel {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        left: calc(100% + 8px);
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+      .bar.open .vlabel {
+        color: var(--accent);
+      }
+
+      .axis {
+        display: grid;
+        grid-template-columns: 168px 1fr;
+        gap: 14px;
+        margin-top: 6px;
+      }
+      .axis .ticks {
+        position: relative;
+        height: 18px;
+      }
+      .axis .tick {
+        position: absolute;
+        transform: translateX(-50%);
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        color: var(--ink-3);
+        top: 0;
+      }
+      .axis .caption {
+        font-size: 11px;
+        color: var(--ink-3);
+        align-self: end;
+      }
+
+      /* tooltip */
+      .tip {
+        position: fixed;
+        z-index: 40;
+        pointer-events: none;
+        background: var(--ink);
+        color: var(--bg);
+        padding: 8px 11px;
+        border-radius: 8px;
+        font-size: 12px;
+        line-height: 1.45;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+        opacity: 0;
+        transform: translateY(4px);
+        transition:
+          opacity 0.12s ease,
+          transform 0.12s ease;
+        max-width: 240px;
+      }
+      .tip.on {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .tip b {
+        color: var(--surface);
+      }
+      .tip .k {
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      /* ---- Persona cards ---- */
+      .cards {
+        display: grid;
+        gap: 16px;
+        margin-top: 22px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--hairline);
+        border-left: 3px solid var(--accent);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+        padding: 20px clamp(18px, 3vw, 26px);
+      }
+      .card .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .card .who {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .card .pid {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .card .title {
+        font-family: var(--serif);
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .card .figs {
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .card .days {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--ink);
+        letter-spacing: -0.02em;
+      }
+      .card .cal {
+        font-size: 12.5px;
+        color: var(--ink-3);
+      }
+      .card .mult {
+        display: inline-block;
+        margin-top: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--accent);
+        background: color-mix(in oklab, var(--accent) 14%, transparent);
+        padding: 2px 8px;
+        border-radius: 20px;
+      }
+      .card p {
+        margin: 0;
+        color: var(--ink-2);
+        font-size: 14.5px;
+      }
+      .card p .em {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .tags {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+      }
+      .tag {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        padding: 3px 9px;
+        border-radius: 20px;
+        border: 1px solid var(--hairline-strong);
+        color: var(--ink-2);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tag .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+      }
+      .tag .yes {
+        background: var(--accent);
+      }
+      .tag .no {
+        background: transparent;
+        border: 1px solid var(--ink-3);
+      }
+
+      /* ---- Callout ---- */
+      .callout {
+        margin-top: 40px;
+        background: var(--surface-2);
+        border: 1px solid var(--hairline);
+        border-radius: 14px;
+        padding: 22px clamp(18px, 3vw, 26px);
+      }
+      .callout h3 {
+        font-family: var(--serif);
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      .callout p {
+        margin: 0;
+        color: var(--ink-2);
+        font-size: 14.5px;
+      }
+      .callout .bars {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .cbar {
+        display: grid;
+        grid-template-columns: 150px 1fr auto;
+        align-items: center;
+        gap: 12px;
+      }
+      .cbar .cl {
+        font-size: 13px;
+        color: var(--ink-2);
+      }
+      .cbar .cw {
+        height: 9px;
+        border-radius: 5px;
+        background: var(--bar);
+      }
+      .cbar .cv {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-3);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---- Caveats ---- */
+      ul.caveats {
+        list-style: none;
+        padding: 0;
+        margin: 22px 0 0;
+        display: grid;
+        gap: 12px;
+      }
+      ul.caveats li {
+        position: relative;
+        padding-left: 24px;
+        color: var(--ink-2);
+        font-size: 14.5px;
+      }
+      ul.caveats li::before {
+        content: '';
+        position: absolute;
+        left: 4px;
+        top: 9px;
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+        background: var(--ochre);
+        transform: rotate(45deg);
+      }
+      ul.caveats li b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      /* ---- Provenance ---- */
+      .prov {
+        margin-top: 48px;
+        background: var(--surface-2);
+        border: 1px solid var(--hairline);
+        border-radius: 14px;
+        padding: 6px clamp(16px, 3vw, 24px);
+      }
+      .prov .prov-h {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ochre);
+        font-weight: 600;
+        padding: 14px 0 10px;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .prov dl {
+        margin: 0;
+        padding: 0 0 12px;
+      }
+      .prov .r {
+        display: grid;
+        grid-template-columns: 128px 1fr;
+        gap: 12px;
+        padding: 7px 0;
+        border-top: 1px solid var(--hairline);
+        font-size: 13px;
+      }
+      .prov dt {
+        color: var(--ink-3);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        letter-spacing: 0.03em;
+        padding-top: 1px;
+      }
+      .prov dd {
+        margin: 0;
+        color: var(--ink);
+      }
+      .prov dd .mono {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+      }
+      .prov dd a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .prov dd a:hover {
+        text-decoration: underline;
+      }
+      .prov .pill {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--accent);
+        background: color-mix(in oklab, var(--accent) 14%, transparent);
+        padding: 1px 7px;
+        border-radius: 20px;
+        margin-left: 6px;
+      }
+
+      /* ---- Footer ---- */
+      footer {
+        margin-top: 20px;
+        padding-top: 18px;
+        border-top: 1px solid var(--hairline);
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--ink-3);
+        font-family: var(--mono);
+      }
+      footer a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+
+      @media (max-width: 560px) {
+        .row,
+        .axis {
+          grid-template-columns: 96px 1fr;
+        }
+        .rlabel .pknow {
+          display: none;
+        }
+        .card .figs {
+          text-align: left;
+        }
+        .card .top {
+          flex-direction: column;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+
+    <div class="wrap">
+      <p class="eyebrow">Build-effort estimate &middot; SCP Tutorial</p>
+      <h1>How long would this have taken <em>one person, alone?</em></h1>
+      <p class="lede">
+        An estimate of the solo effort to build the Systematic Conservation Planning
+        teaching app to its current, shipped quality bar &mdash; sorted by the one thing
+        that moves the number most:
+        <strong>what the builder already knew going in.</strong>
+      </p>
+
+      <!-- SCOPE -->
+      <div class="scope" role="list" aria-label="What was built">
+        <div class="cell" role="listitem">
+          <div class="num">5,250<span class="u">loc</span></div>
+          <div class="lbl">TypeScript source (engine, data, UI)</div>
+        </div>
+        <div class="cell" role="listitem">
+          <div class="num">1,570<span class="u">loc</span></div>
+          <div class="lbl">Tests &middot; 98 passing, ~98% engine cov.</div>
+        </div>
+        <div class="cell" role="listitem">
+          <div class="num">36</div>
+          <div class="lbl">Squash-merged pull requests</div>
+        </div>
+        <div class="cell" role="listitem">
+          <div class="num">14</div>
+          <div class="lbl">Design notes &amp; ADRs (~2,000 lines)</div>
+        </div>
+        <div class="cell hi" role="listitem">
+          <div class="num">~2<span class="u">days</span></div>
+          <div class="lbl">AI-assisted actual, wall-clock</div>
+        </div>
+      </div>
+      <p class="scope-note">
+        Includes a pure greedy engine, an exact ILP solver (min-set + max-coverage,
+        HiGHS wasm in a Web Worker), irreplaceability, canvas rendering, a two-level
+        guided tour, and URL-hash sharing.
+      </p>
+
+      <!-- CHART -->
+      <h2 class="sec-h">Estimated focused solo effort</h2>
+      <p class="sec-sub">
+        Each bar spans the optimistic-to-realistic range in
+        <em>focused working days</em> for a competent mid/senior developer reaching the
+        same outcome without heavy AI assistance. The dashed line marks the AI-assisted
+        actual for scale.
+      </p>
+
+      <div class="chart">
+        <div class="chart-title">
+          <span>Range of focused working days &middot; longer bar = more effort</span>
+          <span class="axis-unit">0 &rarr; 120 days</span>
+        </div>
+
+        <div class="plot">
+          <div class="gridlines" aria-hidden="true">
+            <div class="gl zero" style="left: 0%"></div>
+            <div class="gl" style="left: 25%"></div>
+            <div class="gl" style="left: 50%"></div>
+            <div class="gl" style="left: 75%"></div>
+            <div class="gl" style="left: 100%"></div>
+            <!-- AI reference line at 2/120 = 1.67% -->
+            <div class="refline" style="left: 1.67%"></div>
+            <div
+              class="reftag"
+              style="left: 1.67%; top: -30px; transform: translateX(-6px)"
+            >
+              AI actual &asymp; 2d
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rlabel">
+              <span class="pid">P1</span>
+              <span class="pname">Knows both</span>
+              <span class="pknow">stack + SCP</span>
+            </div>
+            <div class="track">
+              <div
+                class="bar"
+                style="left: 18.3%; width: 6.7%"
+                data-tip="P1 · knows stack + SCP<br><span class='k'>22–30 focused days · ~4–6 weeks</span><br>Baseline. Solver + engine dominate."
+              >
+                <span class="vlabel">22&ndash;30d</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rlabel">
+              <span class="pid">P2</span>
+              <span class="pname">Stack only</span>
+              <span class="pknow">must learn SCP</span>
+            </div>
+            <div class="track">
+              <div
+                class="bar"
+                style="left: 25%; width: 10%"
+                data-tip="P2 · knows stack, not SCP<br><span class='k'>30–42 focused days · ~6–8.5 weeks</span><br>+~40%: ramp to teaching-fidelity + model rework risk."
+              >
+                <span class="vlabel">30&ndash;42d</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rlabel">
+              <span class="pid">P3</span>
+              <span class="pname">SCP only</span>
+              <span class="pknow">must learn stack</span>
+            </div>
+            <div class="track">
+              <div
+                class="bar open"
+                style="left: 54.2%; width: 45.8%"
+                data-tip="P3 · SCP expert, not the stack<br><span class='k'>65–120+ focused days · 3–6+ months</span><br>2–5×, open-ended. Canvas / Worker / wasm are the wall."
+              >
+                <span class="vlabel">65&ndash;120+d</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="axis" aria-hidden="true">
+          <div class="caption">working days &rarr;</div>
+          <div class="ticks">
+            <span class="tick" style="left: 0%">0</span>
+            <span class="tick" style="left: 25%">30</span>
+            <span class="tick" style="left: 50%">60</span>
+            <span class="tick" style="left: 75%">90</span>
+            <span class="tick" style="left: 100%">120</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PERSONA CARDS -->
+      <h2 class="sec-h">The three builders</h2>
+      <p class="sec-sub">
+        Same target, same quality bar. Only the starting knowledge changes &mdash; and
+        with it, the number.
+      </p>
+
+      <div class="cards">
+        <div class="card">
+          <div class="top">
+            <div class="who">
+              <span class="pid">P1 &middot; Baseline</span>
+              <span class="title">Familiar with the stack and SCP</span>
+            </div>
+            <div class="figs">
+              <span class="days">22&ndash;30 days</span>
+              <span class="cal">~4&ndash;6 weeks full-time</span>
+              <span class="mult">1&times; baseline</span>
+            </div>
+          </div>
+          <p>
+            No learning tax. Effort is real engineering: ~21 ideal days across engine,
+            UI, map editing, and the
+            <span class="em">solver integration (~3 days, the single hardest item)</span
+            >, plus ~40% real-world overhead for debugging and dead ends.
+          </p>
+          <div class="tags">
+            <span class="tag"><span class="dot yes"></span>Tech stack</span>
+            <span class="tag"><span class="dot yes"></span>SCP concepts</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="top">
+            <div class="who">
+              <span class="pid">P2 &middot; +~40%</span>
+              <span class="title">Knows the stack, new to SCP</span>
+            </div>
+            <div class="figs">
+              <span class="days">30&ndash;42 days</span>
+              <span class="cal">~6&ndash;8.5 weeks full-time</span>
+              <span class="mult">~1.4&times;</span>
+            </div>
+          </div>
+          <p>
+            Same engineering ability, but must learn SCP to
+            <span class="em">teaching fidelity</span> &mdash; minimum-set,
+            complementarity, irreplaceability, max-coverage &mdash; a 1&ndash;2 week
+            ramp with real rework risk from getting the model subtly wrong. The ILP
+            formulation is gated on truly understanding the problem.
+          </p>
+          <div class="tags">
+            <span class="tag"><span class="dot yes"></span>Tech stack</span>
+            <span class="tag"><span class="dot no"></span>SCP concepts</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="top">
+            <div class="who">
+              <span class="pid">P3 &middot; 2&ndash;5&times;, open-ended</span>
+              <span class="title">SCP expert, new to the stack</span>
+            </div>
+            <div class="figs">
+              <span class="days">65&ndash;120+ days</span>
+              <span class="cal">3&ndash;6+ months</span>
+              <span class="mult">2&ndash;5&times;</span>
+            </div>
+          </div>
+          <p>
+            The largest gap by far. Domain knowledge saves the model-fidelity work, but
+            a typical R/prioritizr practitioner must learn TypeScript, React, Vite,
+            testing, and especially
+            <span class="em"
+              >canvas rendering, Web Workers, and wasm solver integration</span
+            >
+            &mdash; realistically beyond a first web project without heavy help, so the
+            top end is open. Many would ship a rougher tool (e.g. R/Shiny) instead.
+          </p>
+          <div class="tags">
+            <span class="tag"><span class="dot no"></span>Tech stack</span>
+            <span class="tag"><span class="dot yes"></span>SCP concepts</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CALLOUT: where the time goes -->
+      <div class="callout">
+        <h3>The lever isn't the UI &mdash; it's the solver and a faithful model</h3>
+        <p>
+          Both knowledge gaps bite hardest in the same two places. Whoever can't
+          formulate the MILP or doesn't grasp complementarity spends disproportionately
+          there, which is why P2 and P3 diverge so sharply from P1.
+        </p>
+        <div class="bars">
+          <div class="cbar">
+            <span class="cl">Solver + ILP integration</span
+            ><span class="cw" style="width: 100%"></span
+            ><span class="cv">~3 ideal days</span>
+          </div>
+          <div class="cbar">
+            <span class="cl">Pure engine</span
+            ><span class="cw" style="width: 67%"></span><span class="cv">~2 days</span>
+          </div>
+          <div class="cbar">
+            <span class="cl">Design docs + ADRs</span
+            ><span class="cw" style="width: 67%"></span><span class="cv">~2 days</span>
+          </div>
+          <div class="cbar">
+            <span class="cl">Guided tour(s)</span
+            ><span class="cw" style="width: 67%"></span><span class="cv">~2 days</span>
+          </div>
+          <div class="cbar">
+            <span class="cl">Canvas + drag-paint</span
+            ><span class="cw" style="width: 50%"></span
+            ><span class="cv">~1.5 days</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAVEATS -->
+      <h2 class="sec-h">Assumptions worth stating</h2>
+      <ul class="caveats">
+        <li>
+          <b>Same quality bar throughout</b> &mdash; tests, docs, ADRs, accessibility.
+          Drop that and every number roughly halves.
+        </li>
+        <li>
+          <b>Focused days &ne; calendar days.</b> Part-time evenings and weekends
+          stretch these 2&ndash;3&times;.
+        </li>
+        <li>
+          <b>The design already existed</b> as written docs. A true from-scratch solo
+          build also spends time on product design that these numbers only partly fold
+          in.
+        </li>
+        <li>
+          <b>P3's range is open-ended</b> by nature &mdash; the wasm/Worker/canvas
+          architecture is the hard ceiling, and some builders wouldn't reach this exact
+          artifact at all.
+        </li>
+      </ul>
+
+      <!-- PROVENANCE -->
+      <section class="prov" aria-label="Provenance">
+        <p class="prov-h">Provenance &middot; what this estimate describes</p>
+        <dl>
+          <div class="r">
+            <dt>Generated</dt>
+            <dd><span class="mono">2026-07-19 05:46 PDT</span></dd>
+          </div>
+          <div class="r">
+            <dt>Release</dt>
+            <dd>
+              <a
+                href="https://github.com/ricschuster/SCP_tutorial/releases/tag/v0.1.0-mvp"
+                ><span class="mono">v0.1.0-mvp</span></a
+              >
+              <span class="pill">post-MVP teaching app</span>
+            </dd>
+          </div>
+          <div class="r">
+            <dt>App state</dt>
+            <dd>
+              <a
+                href="https://github.com/ricschuster/SCP_tutorial/commit/c2d345b989af70e36f6d583b6fa785e3ecdc5c70"
+                ><span class="mono">main @ c2d345b</span></a
+              >
+              <span class="pill">working tree clean</span>
+            </dd>
+          </div>
+          <div class="r">
+            <dt>HEAD commit</dt>
+            <dd>
+              chore: remove effortLevel from tracked project settings (#62)<br /><span
+                class="mono"
+                style="color: var(--ink-3)"
+                >committed 2026-07-19 05:29 PDT</span
+              >
+            </dd>
+          </div>
+          <div class="r">
+            <dt>Basis</dt>
+            <dd>
+              <span class="mono">36</span> merged PRs &middot;
+              <span class="mono">5,250</span> src + <span class="mono">1,570</span> test
+              LOC
+            </dd>
+          </div>
+          <div class="r">
+            <dt>Live app</dt>
+            <dd>
+              <a href="https://ricschuster.github.io/SCP_tutorial/"
+                >ricschuster.github.io/SCP_tutorial</a
+              >
+              <span class="mono" style="color: var(--ink-3)">(tracks main)</span>
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <footer>
+        <span>Effort estimate &middot; not a bid</span>
+        <span
+          >Pinned to
+          <a href="https://github.com/ricschuster/SCP_tutorial/releases/tag/v0.1.0-mvp"
+            >v0.1.0-mvp</a
+          >
+          (<a
+            href="https://github.com/ricschuster/SCP_tutorial/commit/c2d345b989af70e36f6d583b6fa785e3ecdc5c70"
+            >c2d345b</a
+          >)</span
+        >
+      </footer>
+    </div>
+
+    <div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+    <script>
+      (function () {
+        var tip = document.getElementById('tip');
+        var bars = document.querySelectorAll('[data-tip]');
+        function show(e) {
+          tip.innerHTML = this.getAttribute('data-tip');
+          tip.classList.add('on');
+          move.call(this, e);
+        }
+        function move(e) {
+          var pad = 14;
+          var x = e.clientX + pad,
+            y = e.clientY + pad;
+          var r = tip.getBoundingClientRect();
+          if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - pad;
+          if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - pad;
+          tip.style.left = x + 'px';
+          tip.style.top = y + 'px';
+        }
+        function hide() {
+          tip.classList.remove('on');
+        }
+        bars.forEach(function (b) {
+          b.addEventListener('mouseenter', show);
+          b.addEventListener('mousemove', move);
+          b.addEventListener('mouseleave', hide);
+        });
+      })();
+    </script>
+  </body>
+</html>
