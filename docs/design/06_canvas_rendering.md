@@ -23,7 +23,11 @@ any larger landscape. Canvas draws the same pixels with one DOM node per map.
   so cells stay crisp on high-DPI screens.
 - Hit testing maps a pointer's client coordinates through the canvas box to a
   cell id; paint-on-drag and click-to-inspect behave as before.
-- The temporary test timeout is removed.
+- The global `testTimeout: 20000` (added for SVG render cost) is removed. Canvas
+  fixes the rendering cost, but the irreplaceability Monte Carlo (dozens of
+  greedy solves, added after that timeout) is heavy synchronous compute that only
+  the two irreplaceability UI tests trigger, so those two tests carry an explicit
+  longer per-test timeout instead of penalising the whole suite.
 
 ## Testability
 
