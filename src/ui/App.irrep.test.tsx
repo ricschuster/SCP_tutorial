@@ -27,43 +27,28 @@ function irrepCheckbox(container: HTMLElement): HTMLInputElement {
   return label!.querySelector('input[type="checkbox"]') as HTMLInputElement;
 }
 
-// Toggling the layer on runs the irreplaceability Monte Carlo (dozens of greedy
-// solves over 900 units) synchronously, which can exceed the 5s default on a
-// slow CI runner, so these two tests get a longer explicit timeout.
-const IRREP_TEST_TIMEOUT = 20000;
+test('irreplaceability layer is off by default and toggles on', async () => {
+  const { container, cleanup } = await render();
+  // Off by default: no heat map yet.
+  expect(container.textContent).not.toContain('Irreplaceability (how often selected)');
 
-test(
-  'irreplaceability layer is off by default and toggles on',
-  async () => {
-    const { container, cleanup } = await render();
-    // Off by default: no heat map yet.
-    expect(container.textContent).not.toContain(
-      'Irreplaceability (how often selected)',
-    );
+  await act(async () => irrepCheckbox(container).click());
 
-    await act(async () => irrepCheckbox(container).click());
+  // The heat map and its scale legend appear.
+  expect(container.textContent).toContain('Irreplaceability (how often selected)');
+  expect(container.textContent).toContain('Irreplaceable');
+  expect(container.textContent).toContain('Interchangeable');
+  cleanup();
+});
 
-    // The heat map and its scale legend appear.
-    expect(container.textContent).toContain('Irreplaceability (how often selected)');
-    expect(container.textContent).toContain('Irreplaceable');
-    expect(container.textContent).toContain('Interchangeable');
-    cleanup();
-  },
-  IRREP_TEST_TIMEOUT,
-);
+test('the irreplaceability heat map appears and toggles back off', async () => {
+  const { container, cleanup } = await render();
+  const caption = 'Irreplaceability (how often selected)';
 
-test(
-  'the irreplaceability heat map appears and toggles back off',
-  async () => {
-    const { container, cleanup } = await render();
-    const caption = 'Irreplaceability (how often selected)';
+  await act(async () => irrepCheckbox(container).click());
+  expect(container.querySelector(`canvas[aria-label="${caption}"]`)).not.toBeNull();
 
-    await act(async () => irrepCheckbox(container).click());
-    expect(container.querySelector(`canvas[aria-label="${caption}"]`)).not.toBeNull();
-
-    await act(async () => irrepCheckbox(container).click());
-    expect(container.querySelector(`canvas[aria-label="${caption}"]`)).toBeNull();
-    cleanup();
-  },
-  IRREP_TEST_TIMEOUT,
-);
+  await act(async () => irrepCheckbox(container).click());
+  expect(container.querySelector(`canvas[aria-label="${caption}"]`)).toBeNull();
+  cleanup();
+});
