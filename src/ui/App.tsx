@@ -180,7 +180,7 @@ export function App() {
     const problem = toProblemFromUnits(units, fractions);
     const greedy = solve(problem);
     const { solveExact } = await import('../engine/exact.ts');
-    const exact = solveExact(problem);
+    const exact = await solveExact(problem);
     setComparison({ exact, cmp: compareSolutions(greedy, exact) });
     setComparing(false);
   };
