@@ -162,6 +162,36 @@ function setRange(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+test('Start over reverts the whole app to its default state and clears the hash', async () => {
+  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  const { container, cleanup } = await render();
+
+  // Move away from defaults: switch to the Method tab and nudge a slider (the
+  // first range on this tab is Compactness).
+  const methodTab = [...container.querySelectorAll('button')].find(
+    (b) => b.textContent === 'Method (advanced)',
+  );
+  await act(async () => methodTab!.click());
+  const slider = container.querySelector('input[type="range"]') as HTMLInputElement;
+  await act(async () => setRange(slider, '3'));
+  // A non-default scenario is written to the URL hash.
+  expect(window.location.hash).not.toBe('');
+
+  const startOver = [...container.querySelectorAll('button')].find(
+    (b) => b.textContent === 'Start over',
+  );
+  await act(async () => startOver!.click());
+
+  // Back on Explore with a clean URL; the confirm guard fired once.
+  expect(confirmSpy).toHaveBeenCalledTimes(1);
+  expect(container.textContent).toContain('Edit tools');
+  expect(container.textContent).not.toContain('Greedy vs near-optimal optimum');
+  expect(window.location.hash).toBe('');
+
+  confirmSpy.mockRestore();
+  cleanup();
+});
+
 test('the connectivity control appears on Method and reveals the same-cover option', async () => {
   const { container, cleanup } = await render();
   const methodTab = [...container.querySelectorAll('button')].find(
