@@ -357,6 +357,9 @@ export function App() {
     setSpotlight(s.spotlight ?? FIRST_FEATURE);
     setConnectivityPenalty(s.connectivityPenalty ?? 0);
     setTourStep(step);
+    // Steps that show the greedy-vs-near-optimal comparison solve it on entry, so
+    // the learner lands on a computed result instead of an empty panel.
+    if (s.compute) void runCompare();
   };
 
   const startTour = () => {
