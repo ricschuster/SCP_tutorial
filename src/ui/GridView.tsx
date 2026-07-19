@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react';
 import type { PointerEvent } from 'react';
+import { CELL, cellIndexAt, cellStroke } from './grid-draw.ts';
 
 interface GridViewProps {
   readonly gridSize: number;
@@ -16,8 +18,12 @@ interface GridViewProps {
   readonly inspectedId?: number | null;
 }
 
-// A square grid of planning units drawn as SVG rects. Purely presentational: the
-// caller decides each cell's fill, border, and (optionally) what a paint does.
+const GRID_LINE = 'rgba(0,0,0,0.1)';
+
+// A square grid of planning units drawn on a single <canvas>. Purely
+// presentational: the caller decides each cell's fill, border, and (optionally)
+// what a paint does. Canvas keeps one DOM node per map instead of gridSize^2
+// rects, so it stays smooth as the landscape grows (see the canvas design note).
 export function GridView({
   gridSize,
   fill,
@@ -28,62 +34,109 @@ export function GridView({
   onInspect,
   inspectedId,
 }: GridViewProps) {
-  const cell = 22;
-  const size = gridSize * cell;
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const paintable = Boolean(onPaint);
   const clickable = paintable || Boolean(onInspect);
-  const cells = [];
+  const size = gridSize * CELL;
 
-  for (let id = 0; id < gridSize * gridSize; id++) {
-    const row = Math.floor(id / gridSize);
-    const col = id % gridSize;
-    const isSelected = selected?.has(id) ?? false;
-    const isInspected = inspectedId === id;
-    const statusColor = border?.(id) ?? null;
-    const stroke = isInspected
-      ? '#111'
-      : (statusColor ?? (isSelected ? '#111' : 'rgba(0,0,0,0.1)'));
-    const strokeWidth = isInspected ? 3 : statusColor ? 2.5 : isSelected ? 2 : 0.5;
+  // Redraw after every commit: fill, border, and selected are fresh closures
+  // each render, and the parent re-renders whenever any of them change. Drawing
+  // ~900 cells to a canvas is well under a millisecond, so this is cheap.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas === null) return;
+    const ctx = canvas.getContext('2d');
+    // jsdom has no 2D context; the component still mounts (tests rely on that).
+    if (ctx === null) return;
 
-    cells.push(
-      <rect
-        key={id}
-        x={col * cell}
-        y={row * cell}
-        width={cell}
-        height={cell}
-        fill={fill(id)}
-        stroke={stroke}
-        strokeWidth={strokeWidth}
-        {...(clickable
-          ? {
-              style: { cursor: paintable ? 'crosshair' : 'pointer' },
-              onPointerDown: (e: PointerEvent<SVGRectElement>) => {
-                e.preventDefault();
-                onInspect?.(id);
-                onPaint?.(id);
-              },
-              onPointerEnter: (e: PointerEvent<SVGRectElement>) => {
-                if (e.buttons === 1) onPaint?.(id);
-              },
-            }
-          : {})}
-      />,
-    );
-  }
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== size * dpr || canvas.height !== size * dpr) {
+      canvas.width = size * dpr;
+      canvas.height = size * dpr;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+
+    // Pass 1: cell fills.
+    for (let id = 0; id < gridSize * gridSize; id++) {
+      const row = Math.floor(id / gridSize);
+      const col = id % gridSize;
+      ctx.fillStyle = fill(id);
+      ctx.fillRect(col * CELL, row * CELL, CELL, CELL);
+    }
+
+    // Pass 2: the light background grid, drawn once as lines.
+    ctx.strokeStyle = GRID_LINE;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    for (let i = 0; i <= gridSize; i++) {
+      const p = i * CELL;
+      ctx.moveTo(p, 0);
+      ctx.lineTo(p, size);
+      ctx.moveTo(0, p);
+      ctx.lineTo(size, p);
+    }
+    ctx.stroke();
+
+    // Pass 3: emphasized outlines (inspected / lock status / selected) on top, so
+    // a neighbour's fill never clips them. Inset by half the line width so the
+    // whole stroke stays inside the cell.
+    for (let id = 0; id < gridSize * gridSize; id++) {
+      const stroke = cellStroke({
+        isInspected: inspectedId === id,
+        statusColor: border?.(id) ?? null,
+        isSelected: selected?.has(id) ?? false,
+      });
+      if (stroke === null) continue;
+      const row = Math.floor(id / gridSize);
+      const col = id % gridSize;
+      const inset = stroke.width / 2;
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      ctx.strokeRect(
+        col * CELL + inset,
+        row * CELL + inset,
+        CELL - stroke.width,
+        CELL - stroke.width,
+      );
+    }
+  });
+
+  const cellFrom = (e: PointerEvent<HTMLCanvasElement>): number | null => {
+    const canvas = canvasRef.current;
+    if (canvas === null) return null;
+    return cellIndexAt(e.clientX, e.clientY, canvas.getBoundingClientRect(), gridSize);
+  };
 
   return (
     <figure className="map">
       <figcaption>{caption}</figcaption>
-      <svg
-        className={paintable ? 'grid-svg grid-svg-editable' : 'grid-svg'}
-        viewBox={`0 0 ${size} ${size}`}
+      <canvas
+        ref={canvasRef}
+        className={paintable ? 'grid-canvas grid-canvas-editable' : 'grid-canvas'}
         role="img"
         aria-label={caption}
-        {...(clickable ? { style: { touchAction: 'none' } } : {})}
-      >
-        {cells}
-      </svg>
+        {...(clickable
+          ? {
+              style: {
+                cursor: paintable ? 'crosshair' : 'pointer',
+                touchAction: 'none',
+              },
+              onPointerDown: (e: PointerEvent<HTMLCanvasElement>) => {
+                e.preventDefault();
+                const id = cellFrom(e);
+                if (id === null) return;
+                onInspect?.(id);
+                onPaint?.(id);
+              },
+              onPointerEnter: (e: PointerEvent<HTMLCanvasElement>) => {
+                if (e.buttons !== 1) return;
+                const id = cellFrom(e);
+                if (id !== null) onPaint?.(id);
+              },
+            }
+          : {})}
+      />
     </figure>
   );
 }

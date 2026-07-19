@@ -41,14 +41,14 @@ test('irreplaceability layer is off by default and toggles on', async () => {
   cleanup();
 });
 
-test('irreplaceability heat marks at least one fully irreplaceable cell', async () => {
+test('the irreplaceability heat map appears and toggles back off', async () => {
   const { container, cleanup } = await render();
-  await act(async () => irrepCheckbox(container).click());
+  const caption = 'Irreplaceability (how often selected)';
 
-  // The heat fill ramps light-to-warm; a fully irreplaceable cell is the ramp's
-  // hot end (rgb(179 0 0)). The default landscape has essential cells, so at
-  // least one should reach it.
-  const hot = container.querySelectorAll('rect[fill="rgb(179 0 0)"]');
-  expect(hot.length).toBeGreaterThan(0);
+  await act(async () => irrepCheckbox(container).click());
+  expect(container.querySelector(`canvas[aria-label="${caption}"]`)).not.toBeNull();
+
+  await act(async () => irrepCheckbox(container).click());
+  expect(container.querySelector(`canvas[aria-label="${caption}"]`)).toBeNull();
   cleanup();
 });
