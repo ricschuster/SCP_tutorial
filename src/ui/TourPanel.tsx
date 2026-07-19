@@ -7,6 +7,9 @@ interface TourPanelProps {
   readonly onBack: () => void;
   readonly onNext: () => void;
   readonly onClose: () => void;
+  // When set, this is the last step of the short tour and there is more: the
+  // panel offers to continue into the full tour instead of a plain Next.
+  readonly onContinueFull?: () => void;
 }
 
 // A fixed bar at the bottom of the screen driving the guided tour.
@@ -17,6 +20,7 @@ export function TourPanel({
   onBack,
   onNext,
   onClose,
+  onContinueFull,
 }: TourPanelProps) {
   const isLast = index === total - 1;
   return (
@@ -39,20 +43,44 @@ export function TourPanel({
         <p className="tour-body">{step.body}</p>
       </div>
       <div className="tour-actions">
-        <button type="button" className="tour-btn" onClick={onClose}>
-          Close
-        </button>
-        <button
-          type="button"
-          className="tour-btn"
-          onClick={onBack}
-          disabled={index === 0}
-        >
-          Back
-        </button>
-        <button type="button" className="tour-btn tour-btn-primary" onClick={onNext}>
-          {isLast ? 'Finish' : 'Next'}
-        </button>
+        {onContinueFull ? (
+          <>
+            <button type="button" className="tour-btn" onClick={onBack}>
+              Back
+            </button>
+            <button type="button" className="tour-btn" onClick={onClose}>
+              Finish
+            </button>
+            <button
+              type="button"
+              className="tour-btn tour-btn-primary"
+              onClick={onContinueFull}
+            >
+              Continue full tour
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="tour-btn" onClick={onClose}>
+              Close
+            </button>
+            <button
+              type="button"
+              className="tour-btn"
+              onClick={onBack}
+              disabled={index === 0}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              className="tour-btn tour-btn-primary"
+              onClick={onNext}
+            >
+              {isLast ? 'Finish' : 'Next'}
+            </button>
+          </>
+        )}
       </div>
     </aside>
   );

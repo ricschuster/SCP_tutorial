@@ -40,7 +40,7 @@ import {
 import { GridView } from './GridView.tsx';
 import { CostTargetCurve } from './CostTargetCurve.tsx';
 import { TourPanel } from './TourPanel.tsx';
-import { TOUR_STEPS, type TourRegion } from './tour.ts';
+import { SHORT_TOUR_LENGTH, TOUR_STEPS, type TourRegion } from './tour.ts';
 import { mix, type Rgb } from './color.ts';
 
 // Habitat scalar ramp (single hue for every habitat map, so feature identity is
@@ -247,15 +247,24 @@ export function App() {
   const costRange = useMemo(() => costRangeOf(units), [units]);
   const totalUnits = units.length;
 
-  // Guided tour (lightweight: narrate + highlight an existing region).
+  // Guided tour: narrate + highlight a region + perform the step's control
+  // actions. `fullTour` tracks whether the learner continued past the short tour.
   const rootRef = useRef<HTMLElement | null>(null);
   const [tourStep, setTourStep] = useState<number | null>(null);
+  const [fullTour, setFullTour] = useState(false);
   const tourActive = tourStep !== null;
   const currentStep = tourStep === null ? null : (TOUR_STEPS[tourStep] ?? null);
-
-  // Which tab a tour region lives on, so the tour can reveal it before scrolling.
-  const regionTab = (region: TourRegion): AppView =>
-    region === 'curve' ? 'method' : 'explore';
+  // The number of steps in the current scope (short by default).
+  const tourTotal = fullTour ? TOUR_STEPS.length : SHORT_TOUR_LENGTH;
+  // Pre-tour state to restore when the tour closes, so it never leaves the app
+  // with the irreplaceability layer on or the connectivity knob turned up.
+  const tourSnapshot = useRef<{
+    view: AppView;
+    showIrrep: boolean;
+    spotlight: string;
+    connectivityPenalty: number;
+    inspected: number | null;
+  } | null>(null);
 
   useEffect(() => {
     if (currentStep === null) return;
@@ -321,19 +330,54 @@ export function App() {
 
   const tourHi = (key: TourRegion) =>
     currentStep?.region === key ? ' tour-highlight' : '';
-  // Move to a tour step and reveal the tab that step's region lives on. Setting
-  // the view here (in the handler) rather than in an effect keeps the tab switch
-  // an explicit action, not a render side effect.
+
+  // Apply a tour step (or close the tour). Each step declares the full control
+  // state it wants, so this sets exactly those and clears the rest to their tour
+  // defaults; steps are therefore order-independent. Doing this in the handler,
+  // not an effect, keeps the tab switch and control changes explicit actions.
   const goToStep = (step: number | null) => {
-    const s = step === null ? null : (TOUR_STEPS[step] ?? null);
-    if (s) setView(regionTab(s.region));
-    // Open (or clear) the mechanics inspector for steps that call one out.
-    setInspected(s?.inspect ?? null);
+    if (step === null) {
+      const snap = tourSnapshot.current;
+      if (snap) {
+        setView(snap.view);
+        setShowIrrep(snap.showIrrep);
+        setSpotlight(snap.spotlight);
+        setConnectivityPenalty(snap.connectivityPenalty);
+        setInspected(snap.inspected);
+        tourSnapshot.current = null;
+      }
+      setTourStep(null);
+      return;
+    }
+    const s = TOUR_STEPS[step];
+    if (!s) return;
+    setView(s.tab);
+    setInspected(s.inspect ?? null);
+    setShowIrrep(s.showIrrep ?? false);
+    setSpotlight(s.spotlight ?? FIRST_FEATURE);
+    setConnectivityPenalty(s.connectivityPenalty ?? 0);
     setTourStep(step);
+  };
+
+  const startTour = () => {
+    tourSnapshot.current = {
+      view,
+      showIrrep,
+      spotlight,
+      connectivityPenalty,
+      inspected,
+    };
+    setFullTour(false);
+    goToStep(0);
+  };
+  const continueFullTour = () => {
+    setFullTour(true);
+    goToStep(SHORT_TOUR_LENGTH);
   };
   const nextStep = () => {
     if (tourStep === null) return;
-    goToStep(tourStep + 1 >= TOUR_STEPS.length ? null : tourStep + 1);
+    const scopeEnd = (fullTour ? TOUR_STEPS.length : SHORT_TOUR_LENGTH) - 1;
+    goToStep(tourStep >= scopeEnd ? null : tourStep + 1);
   };
   const backStep = () => {
     if (tourStep !== null) goToStep(Math.max(0, tourStep - 1));
@@ -497,7 +541,7 @@ export function App() {
           >
             {copied ? 'Link copied' : 'Copy link'}
           </button>
-          <button type="button" className="tour-start" onClick={() => goToStep(0)}>
+          <button type="button" className="tour-start" onClick={startTour}>
             Guided tour
           </button>
         </div>
@@ -646,7 +690,10 @@ export function App() {
                 />
               </label>
 
-              <label className="control">
+              <label
+                className={`control${tourHi('connectivity')}`}
+                data-region="connectivity"
+              >
                 <span className="control-label">
                   Connectivity: {connectivityPenalty}
                 </span>
@@ -911,7 +958,7 @@ export function App() {
           )}
 
           {view === 'method' && (
-            <div className="panel compare">
+            <div className={`panel compare${tourHi('compare')}`} data-region="compare">
               <div className="compare-head">
                 <h2>Greedy vs exact optimum</h2>
                 <button
@@ -1086,10 +1133,13 @@ export function App() {
         <TourPanel
           step={currentStep}
           index={tourStep}
-          total={TOUR_STEPS.length}
+          total={tourTotal}
           onBack={backStep}
           onNext={nextStep}
-          onClose={() => setTourStep(null)}
+          onClose={() => goToStep(null)}
+          {...(!fullTour && tourStep === SHORT_TOUR_LENGTH - 1
+            ? { onContinueFull: continueFullTour }
+            : {})}
         />
       )}
     </main>
