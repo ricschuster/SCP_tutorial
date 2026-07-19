@@ -48,15 +48,19 @@ export interface Scenario {
 // are used only for feature identity in the target/weight controls and the
 // feature table; the maps shade habitat on a single scalar ramp, not per-species
 // hues, so the display scales to many features (see docs/design/08).
+// Real Canadian species, with each one's ecological niche in brackets so the
+// species-to-cover link stays explicit. Ids are the niche (kept stable so shared
+// links and the suitability matrix do not churn); only the display name is the
+// species.
 const FEATURES: readonly ScenarioFeature[] = [
-  { id: 'forest', name: 'Forest species', color: '#2e7d32' },
-  { id: 'wetland', name: 'Wetland species', color: '#1565c0' },
-  { id: 'grassland', name: 'Grassland species', color: '#f9a825' },
-  { id: 'riparian', name: 'Riparian species', color: '#00acc1' },
-  { id: 'farmland', name: 'Farmland species', color: '#6d4c41' },
-  { id: 'waterbird', name: 'Waterbird species', color: '#5e35b1' },
-  { id: 'generalist', name: 'Generalist species', color: '#546e7a' },
-  { id: 'shrubland', name: 'Shrubland species', color: '#c0ca33' },
+  { id: 'forest', name: 'Woodland Caribou (forest)', color: '#2e7d32' },
+  { id: 'wetland', name: 'Great Blue Heron (wetland)', color: '#1565c0' },
+  { id: 'grassland', name: 'Plains Bison (grassland)', color: '#f9a825' },
+  { id: 'riparian', name: 'Beaver (riparian)', color: '#00acc1' },
+  { id: 'farmland', name: 'Bobolink (farmland)', color: '#6d4c41' },
+  { id: 'waterbird', name: 'Common Loon (waterbird)', color: '#5e35b1' },
+  { id: 'generalist', name: 'Red Fox (generalist)', color: '#546e7a' },
+  { id: 'shrubland', name: 'White-tailed Deer (shrubland)', color: '#c0ca33' },
 ];
 
 function gaussian(row: number, col: number, cr: number, cc: number, s: number): number {

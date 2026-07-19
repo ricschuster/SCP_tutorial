@@ -27,7 +27,7 @@ afterEach(() => {
 test('App renders the title and target controls', async () => {
   const { container, cleanup } = await render();
   expect(container.textContent).toContain('SCP Tutorial');
-  expect(container.textContent).toContain('Forest species');
+  expect(container.textContent).toContain('Woodland Caribou');
   // At least the three per-feature target sliders are present.
   expect(
     container.querySelectorAll('input[type="range"]').length,
@@ -118,7 +118,7 @@ test('habitat maps are a combined layer plus a species spotlight selector', asyn
     container.querySelector('canvas[aria-label^="Combined habitat"]'),
   ).not.toBeNull();
   expect(
-    container.querySelector('canvas[aria-label^="Forest species habitat"]'),
+    container.querySelector('canvas[aria-label^="Woodland Caribou (forest) habitat"]'),
   ).not.toBeNull();
 
   const select = container.querySelector(
@@ -133,10 +133,10 @@ test('habitat maps are a combined layer plus a species spotlight selector', asyn
     select.dispatchEvent(new Event('change', { bubbles: true }));
   });
   expect(
-    container.querySelector('canvas[aria-label^="Waterbird species habitat"]'),
+    container.querySelector('canvas[aria-label^="Common Loon (waterbird) habitat"]'),
   ).not.toBeNull();
   expect(
-    container.querySelector('canvas[aria-label^="Forest species habitat"]'),
+    container.querySelector('canvas[aria-label^="Woodland Caribou (forest) habitat"]'),
   ).toBeNull();
   cleanup();
 });
