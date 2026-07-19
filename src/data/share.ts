@@ -1,9 +1,10 @@
 // Save / share a scenario as a compact, URL-safe token.
 //
-// The full working state (edited unit amounts, costs, lock status, per-feature
+// The full working state (edited unit cover and lock status, per-feature
 // targets, and method options) is serialized so it can live in the page URL and
 // be restored on load. Unit edits are stored as a diff against the base
-// landscape, so an unedited scenario costs almost nothing to encode.
+// landscape, so an unedited scenario costs almost nothing to encode. Feature
+// amounts and cost are derived from cover, so they are never stored.
 //
 // The token is versioned. Any token that fails to parse, targets an unknown
 // version, or carries out-of-range values is rejected (decode returns null) so
@@ -14,10 +15,17 @@
 import { DEFAULT_TARGET_FRACTION } from '../engine/constants.ts';
 import type { Objective } from '../engine/greedy.ts';
 import type { PlanningUnitStatus } from '../engine/types.ts';
-import { makeWorkingUnits, SCENARIO, type WorkingUnit } from './scenario.ts';
+import { isCoverId, type CoverId } from './land-cover.ts';
+import {
+  applyCover,
+  makeWorkingUnits,
+  SCENARIO,
+  type WorkingUnit,
+} from './scenario.ts';
 
-// Current token schema version. Bump when the wire shape changes.
-const SCHEMA_VERSION = 1;
+// Current token schema version. Bump when the wire shape changes. v2 stores unit
+// cover (v1 stored raw amounts/cost, which are now derived).
+const SCHEMA_VERSION = 2;
 
 // Valid ranges for the method knobs, mirrored from the UI controls. Values are
 // clamped to these on decode so a tampered link cannot push the solver
@@ -38,12 +46,11 @@ export interface ScenarioState {
 }
 
 // A single edited unit, relative to the base landscape. Only changed fields are
-// present. Status is 'i' (locked-in) or 'o' (locked-out); 'available' is the
-// default and is never stored.
+// present. `cv` is the repainted cover class; status is 'i' (locked-in) or 'o'
+// (locked-out); 'available' is the default and is never stored.
 interface WireUnit {
   i: number;
-  c?: number;
-  a?: Record<string, number>;
+  cv?: CoverId;
   s?: 'i' | 'o';
 }
 
@@ -82,27 +89,12 @@ function clamp(x: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, x));
 }
 
-function amountsEqual(
-  a: Readonly<Record<string, number>>,
-  b: Readonly<Record<string, number>>,
-): boolean {
-  const ak = Object.keys(a);
-  const bk = Object.keys(b);
-  if (ak.length !== bk.length) return false;
-  for (const k of ak) if (a[k] !== b[k]) return false;
-  return true;
-}
-
 // True if any unit has been edited away from the base landscape.
 export function hasUnitEdits(units: readonly WorkingUnit[]): boolean {
   return units.some((u) => {
     const base = SCENARIO.units[u.id];
     if (base === undefined) return true;
-    return (
-      u.cost !== base.cost ||
-      u.status !== 'available' ||
-      !amountsEqual(u.amounts, base.amounts)
-    );
+    return u.cover !== base.cover || u.status !== 'available';
   });
 }
 
@@ -129,12 +121,8 @@ function toWire(state: ScenarioState): Wire {
     const base = SCENARIO.units[unit.id];
     const diff: WireUnit = { i: unit.id };
     let changed = false;
-    if (base === undefined || unit.cost !== base.cost) {
-      diff.c = unit.cost;
-      changed = true;
-    }
-    if (base === undefined || !amountsEqual(unit.amounts, base.amounts)) {
-      diff.a = { ...unit.amounts };
+    if (base === undefined || unit.cover !== base.cover) {
+      diff.cv = unit.cover;
       changed = true;
     }
     if (unit.status !== 'available') {
@@ -195,26 +183,20 @@ function readFractionMap(
 
 function readUnits(raw: unknown): WorkingUnit[] {
   const units = makeWorkingUnits();
-  const byId = new Map(units.map((u) => [u.id, u]));
+  const indexById = new Map(units.map((u, i) => [u.id, i]));
   if (!Array.isArray(raw)) return units;
   for (const entry of raw) {
     if (!isObject(entry)) continue;
     const id = entry.i;
     if (typeof id !== 'number') continue;
-    const unit = byId.get(id);
-    if (unit === undefined) continue;
-    if (typeof entry.c === 'number' && Number.isFinite(entry.c)) {
-      unit.cost = Math.max(1, entry.c);
-    }
-    if (isObject(entry.a)) {
-      const amounts: Record<string, number> = {};
-      for (const [k, v] of Object.entries(entry.a)) {
-        if (typeof v === 'number' && Number.isFinite(v) && v > 0) amounts[k] = v;
-      }
-      unit.amounts = amounts;
-    }
+    const index = indexById.get(id);
+    if (index === undefined) continue;
+    let unit = units[index]!;
+    // Repaint cover (re-derives amounts and cost). Unknown covers are ignored.
+    if (isCoverId(entry.cv)) unit = applyCover(unit, entry.cv);
     if (entry.s === 'i') unit.status = 'locked-in';
     else if (entry.s === 'o') unit.status = 'locked-out';
+    units[index] = unit;
   }
   return units;
 }

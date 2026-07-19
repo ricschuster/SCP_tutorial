@@ -7,6 +7,7 @@ import {
 } from '../engine/index.ts';
 import { compareSolutions, type SolutionComparison } from '../engine/compare.ts';
 import {
+  applyCover,
   costRangeOf,
   featureMaxOf,
   makeWorkingUnits,
@@ -15,6 +16,7 @@ import {
   toProblemFromUnits,
   type WorkingUnit,
 } from '../data/scenario.ts';
+import { COVERS, type CoverId } from '../data/land-cover.ts';
 import {
   decodeState,
   defaultState,
@@ -43,8 +45,15 @@ const DIFF_GREEDY = '#f9a825';
 const DIFF_EXACT = '#1565c0';
 const DIFF_NONE = 'rgb(235 235 235)';
 
-const AMOUNT_MAX = 12;
-const COST_MAX = 15;
+const FIRST_COVER: CoverId = COVERS[0]?.id ?? 'forest';
+
+function coverColor(id: CoverId): string {
+  return COVERS.find((c) => c.id === id)?.color ?? '#999';
+}
+
+function coverName(id: CoverId): string {
+  return COVERS.find((c) => c.id === id)?.name ?? id;
+}
 
 // Legend for the priority map. Built from the color constants so they stay the
 // single source of truth. "fill" swatches are solid; "border" swatches match how
@@ -55,13 +64,11 @@ const LEGEND: { label: string; kind: 'fill' | 'border'; color: string }[] = [
   { label: 'Locked out', kind: 'border', color: LOCK_OUT },
 ];
 
-type Tool = 'amount' | 'cost' | 'lockIn' | 'lockOut' | 'clear';
+type Tool = 'cover' | 'lockIn' | 'lockOut' | 'clear';
 
 interface Brush {
   tool: Tool;
-  featureId: string;
-  amountValue: number;
-  costValue: number;
+  cover: CoverId;
 }
 
 const FIRST_FEATURE = SCENARIO.features[0]?.id ?? '';
@@ -76,14 +83,9 @@ function featureName(id: string): string {
 
 function applyBrush(unit: WorkingUnit, brush: Brush): WorkingUnit {
   switch (brush.tool) {
-    case 'amount': {
-      const amounts = { ...unit.amounts };
-      if (brush.amountValue <= 0) delete amounts[brush.featureId];
-      else amounts[brush.featureId] = brush.amountValue;
-      return { ...unit, amounts };
-    }
-    case 'cost':
-      return { ...unit, cost: Math.max(1, brush.costValue) };
+    case 'cover':
+      // Repaint cover; amounts and cost re-derive from the new cover.
+      return applyCover(unit, brush.cover);
     case 'lockIn':
       // Toggle: clicking a locked-in cell with this tool clears it.
       return {
@@ -103,8 +105,7 @@ function applyBrush(unit: WorkingUnit, brush: Brush): WorkingUnit {
 }
 
 const TOOLS: { id: Tool; label: string }[] = [
-  { id: 'amount', label: 'Feature' },
-  { id: 'cost', label: 'Cost' },
+  { id: 'cover', label: 'Paint cover' },
   { id: 'lockIn', label: 'Lock in' },
   { id: 'lockOut', label: 'Lock out' },
   { id: 'clear', label: 'Clear' },
@@ -140,10 +141,8 @@ export function App() {
     () => initial.fractions,
   );
   const [brush, setBrush] = useState<Brush>({
-    tool: 'amount',
-    featureId: FIRST_FEATURE,
-    amountValue: 8,
-    costValue: 6,
+    tool: 'cover',
+    cover: FIRST_COVER,
   });
   const [curveFocus, setCurveFocus] = useState(FIRST_FEATURE);
   const [objective, setObjective] = useState<Objective>(() => initial.objective);
@@ -274,7 +273,10 @@ export function App() {
       mix(FEATURE_LO, to, (unitsById.get(id)?.amounts[featureId] ?? 0) / max);
   };
 
-  const editFill = brush.tool === 'amount' ? featureFill(brush.featureId) : costFill;
+  const coverFill = (id: number): string => {
+    const cover = unitsById.get(id)?.cover;
+    return cover ? coverColor(cover) : UNSELECTED;
+  };
 
   const statusBorder = (id: number): string | null => {
     const status = unitsById.get(id)?.status;
@@ -284,15 +286,13 @@ export function App() {
   };
 
   const editCaption =
-    brush.tool === 'amount'
-      ? `Edit: paint ${featureName(brush.featureId)}`
-      : brush.tool === 'cost'
-        ? 'Edit: paint cost'
-        : brush.tool === 'lockIn'
-          ? 'Edit: lock in (click to toggle; always protected)'
-          : brush.tool === 'lockOut'
-            ? 'Edit: lock out (click to toggle; never selected)'
-            : 'Edit: clear lock status';
+    brush.tool === 'cover'
+      ? `Edit: paint ${coverName(brush.cover)}`
+      : brush.tool === 'lockIn'
+        ? 'Edit: lock in (click to toggle; always protected)'
+        : brush.tool === 'lockOut'
+          ? 'Edit: lock out (click to toggle; never selected)'
+          : 'Edit: clear lock status';
 
   return (
     <main className={tourActive ? 'app tour-active' : 'app'} ref={rootRef}>
@@ -300,9 +300,9 @@ export function App() {
         <div>
           <h1>SCP Tutorial</h1>
           <p className="tagline">
-            Set a target for each feature and paint the landscape. The solver picks the
-            lowest-cost set of areas that meets every target, and re-solves as you
-            change things.
+            Set a target for each species and paint land cover on the map. Habitat and
+            cost follow from the cover. The solver picks the lowest-cost set of areas
+            that meets every target, and re-solves as you change things.
           </p>
         </div>
         <div className="title-actions">
@@ -362,49 +362,20 @@ export function App() {
               ))}
             </div>
 
-            {brush.tool === 'amount' && (
-              <>
-                <div className="tool-row">
-                  {SCENARIO.features.map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      className={f.id === brush.featureId ? 'tool tool-on' : 'tool'}
-                      onClick={() => setBrush((b) => ({ ...b, featureId: f.id }))}
-                    >
-                      <span className="swatch" style={{ background: f.color }} />
-                      {f.name.replace(' species', '')}
-                    </button>
-                  ))}
-                </div>
-                <label className="control">
-                  <span className="control-label">Amount: {brush.amountValue}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={AMOUNT_MAX}
-                    value={brush.amountValue}
-                    onChange={(e) =>
-                      setBrush((b) => ({ ...b, amountValue: Number(e.target.value) }))
-                    }
-                  />
-                </label>
-              </>
-            )}
-
-            {brush.tool === 'cost' && (
-              <label className="control">
-                <span className="control-label">Cost: {brush.costValue}</span>
-                <input
-                  type="range"
-                  min={1}
-                  max={COST_MAX}
-                  value={brush.costValue}
-                  onChange={(e) =>
-                    setBrush((b) => ({ ...b, costValue: Number(e.target.value) }))
-                  }
-                />
-              </label>
+            {brush.tool === 'cover' && (
+              <div className="tool-row">
+                {COVERS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={c.id === brush.cover ? 'tool tool-on' : 'tool'}
+                    onClick={() => setBrush((b) => ({ ...b, cover: c.id }))}
+                  >
+                    <span className="swatch" style={{ background: c.color }} />
+                    {c.name}
+                  </button>
+                ))}
+              </div>
             )}
 
             <div className="edit-actions">
@@ -560,7 +531,7 @@ export function App() {
                 <GridView
                   gridSize={SCENARIO.gridSize}
                   caption={editCaption}
-                  fill={editFill}
+                  fill={coverFill}
                   border={statusBorder}
                   onPaint={paint}
                 />
@@ -580,6 +551,14 @@ export function App() {
                       }
                     />
                     {item.label}
+                  </li>
+                ))}
+              </ul>
+              <ul className="legend">
+                {COVERS.map((c) => (
+                  <li key={c.id}>
+                    <span className="legend-swatch" style={{ background: c.color }} />
+                    {c.name}
                   </li>
                 ))}
               </ul>
@@ -664,13 +643,22 @@ export function App() {
             className={`feature-section${tourHi('features')}`}
             data-region="features"
           >
-            <h2>Conservation features</h2>
+            <h2>Derived from land cover</h2>
+            <p className="hint">
+              Cost and each species&apos; habitat are computed from the cover you paint,
+              not set directly.
+            </p>
             <div className="maps">
+              <GridView
+                gridSize={SCENARIO.gridSize}
+                caption="Cost to protect (darker = pricier)"
+                fill={costFill}
+              />
               {SCENARIO.features.map((f) => (
                 <GridView
                   key={f.id}
                   gridSize={SCENARIO.gridSize}
-                  caption={`${f.name} (darker = more)`}
+                  caption={`${f.name} habitat (darker = more)`}
                   fill={featureFill(f.id)}
                 />
               ))}

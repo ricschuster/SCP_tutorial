@@ -6,9 +6,10 @@
 // amount that a solution must cover. Used as the starting target in the app.
 export const DEFAULT_TARGET_FRACTION = 0.3;
 
-// Starting size of the synthetic landscape (GRID_SIZE x GRID_SIZE planning
-// units). See docs/design/02_example_scenario.md.
-export const GRID_SIZE = 10;
+// Size of the synthetic landscape (GRID_SIZE x GRID_SIZE planning units). The
+// land-cover model uses a 30x30 landscape so the cover regions read as a real
+// place. See docs/design/04_land_cover_model.md.
+export const GRID_SIZE = 30;
 
 // Tolerance for floating-point comparisons of amounts, costs, and scores.
 export const EPS = 1e-9;
