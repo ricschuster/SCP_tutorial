@@ -18,6 +18,12 @@ async function render(): Promise<{ container: HTMLElement; cleanup: () => void }
   };
 }
 
+afterEach(() => {
+  // Some tests switch tabs or edit, which writes the scenario to the URL hash;
+  // clear it so the next test hydrates from the default state, not a leftover.
+  window.history.replaceState(null, '', window.location.pathname);
+});
+
 test('App renders the title and target controls', async () => {
   const { container, cleanup } = await render();
   expect(container.textContent).toContain('SCP Tutorial');
@@ -35,6 +41,22 @@ test('App solves and shows a priority map, cost, and attainment', async () => {
   expect(selected.length).toBeGreaterThan(0);
   expect(container.textContent).toContain('Total cost');
   expect(container.textContent).toContain('Areas selected');
+  cleanup();
+});
+
+test('tabs switch between Explore and Method content', async () => {
+  const { container, cleanup } = await render();
+  // Explore is the default: edit tools shown, advanced content hidden.
+  expect(container.textContent).toContain('Edit tools');
+  expect(container.textContent).not.toContain('Greedy vs exact optimum');
+
+  const methodTab = [...container.querySelectorAll('button')].find(
+    (b) => b.textContent === 'Method (advanced)',
+  );
+  await act(async () => methodTab!.click());
+
+  expect(container.textContent).toContain('Greedy vs exact optimum');
+  expect(container.textContent).not.toContain('Edit tools');
   cleanup();
 });
 

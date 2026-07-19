@@ -36,12 +36,15 @@ const WEIGHT = { min: 0, max: 3 } as const;
 const DEFAULT_BUDGET_PCT = 50;
 const DEFAULT_WEIGHT = 1;
 
+export type AppView = 'explore' | 'method';
+
 export interface ScenarioState {
   fractions: Record<string, number>;
   weights: Record<string, number>;
   objective: Objective;
   budgetPct: number;
   boundaryPenalty: number;
+  view: AppView;
   units: WorkingUnit[];
 }
 
@@ -61,6 +64,8 @@ interface Wire {
   o: 0 | 1;
   b: number;
   p: number;
+  // Active view: absent means 'explore' (the default), so a clean URL stays clean.
+  vw?: 1;
   u: WireUnit[];
 }
 
@@ -81,6 +86,7 @@ export function defaultState(): ScenarioState {
     objective: 'min-set',
     budgetPct: DEFAULT_BUDGET_PCT,
     boundaryPenalty: 0,
+    view: 'explore',
     units: makeWorkingUnits(),
   };
 }
@@ -103,6 +109,7 @@ export function isDefaultState(state: ScenarioState): boolean {
   if (state.objective !== 'min-set') return false;
   if (state.budgetPct !== DEFAULT_BUDGET_PCT) return false;
   if (state.boundaryPenalty !== 0) return false;
+  if (state.view !== 'explore') return false;
   for (const id of FEATURE_IDS) {
     if (state.fractions[id] !== DEFAULT_TARGET_FRACTION) return false;
     if (state.weights[id] !== DEFAULT_WEIGHT) return false;
@@ -138,6 +145,7 @@ function toWire(state: ScenarioState): Wire {
     o: state.objective === 'max-coverage' ? 1 : 0,
     b: state.budgetPct,
     p: state.boundaryPenalty,
+    ...(state.view === 'method' ? { vw: 1 as const } : {}),
     u,
   };
 }
@@ -224,6 +232,7 @@ export function decodeState(token: string | null | undefined): ScenarioState | n
       typeof wire.p === 'number' && Number.isFinite(wire.p)
         ? clamp(wire.p, BOUNDARY_PENALTY.min, BOUNDARY_PENALTY.max)
         : 0,
+    view: wire.vw === 1 ? 'method' : 'explore',
     units: readUnits(wire.u),
   };
 }

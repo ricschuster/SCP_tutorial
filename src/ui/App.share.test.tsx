@@ -33,11 +33,17 @@ test('the app hydrates method options from a shared link', async () => {
 
   const { container, cleanup } = await render();
 
+  // The objective controls live on the Method tab; switch to it.
+  const methodTab = [...container.querySelectorAll('button')].find(
+    (b) => b.textContent === 'Method (advanced)',
+  );
+  await act(async () => methodTab!.click());
+
   const maxCoverage = [...container.querySelectorAll('button')].find(
     (b) => b.textContent === 'Max coverage',
   );
   expect(maxCoverage?.className).toContain('tool-on');
-  // The budget readout only appears under the max-coverage objective.
+  // The budget readout appears in the shared stats under max-coverage.
   expect(container.textContent).toContain('Budget used');
   cleanup();
 });

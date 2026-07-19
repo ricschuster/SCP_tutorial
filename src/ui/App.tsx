@@ -30,6 +30,7 @@ import {
   encodeState,
   hasUnitEdits,
   isDefaultState,
+  type AppView,
   type ScenarioState,
 } from '../data/share.ts';
 import { GridView } from './GridView.tsx';
@@ -152,6 +153,7 @@ export function App() {
     cover: FIRST_COVER,
   });
   const [inspected, setInspected] = useState<number | null>(null);
+  const [view, setView] = useState<AppView>(() => initial.view);
   const [curveFocus, setCurveFocus] = useState(FIRST_FEATURE);
   const [objective, setObjective] = useState<Objective>(() => initial.objective);
   const [budgetPct, setBudgetPct] = useState(() => initial.budgetPct);
@@ -206,6 +208,10 @@ export function App() {
   const tourActive = tourStep !== null;
   const currentStep = tourStep === null ? null : (TOUR_STEPS[tourStep] ?? null);
 
+  // Which tab a tour region lives on, so the tour can reveal it before scrolling.
+  const regionTab = (region: TourRegion): AppView =>
+    region === 'curve' ? 'method' : 'explore';
+
   useEffect(() => {
     if (currentStep === null) return;
     const el = rootRef.current?.querySelector(`[data-region="${currentStep.region}"]`);
@@ -222,12 +228,13 @@ export function App() {
       objective,
       budgetPct,
       boundaryPenalty,
+      view,
       units,
     };
     const base = `${window.location.pathname}${window.location.search}`;
     const url = isDefaultState(state) ? base : `${base}#${encodeState(state)}`;
     window.history.replaceState(null, '', url);
-  }, [fractions, weights, objective, budgetPct, boundaryPenalty, units]);
+  }, [fractions, weights, objective, budgetPct, boundaryPenalty, view, units]);
 
   // Clear the pending "Link copied" timer if the app unmounts mid-feedback.
   useEffect(
@@ -250,9 +257,23 @@ export function App() {
 
   const tourHi = (key: TourRegion) =>
     currentStep?.region === key ? ' tour-highlight' : '';
-  const nextStep = () =>
-    setTourStep((s) => (s === null || s + 1 >= TOUR_STEPS.length ? null : s + 1));
-  const backStep = () => setTourStep((s) => (s === null ? s : Math.max(0, s - 1)));
+  // Move to a tour step and reveal the tab that step's region lives on. Setting
+  // the view here (in the handler) rather than in an effect keeps the tab switch
+  // an explicit action, not a render side effect.
+  const goToStep = (step: number | null) => {
+    if (step !== null) {
+      const s = TOUR_STEPS[step];
+      if (s) setView(regionTab(s.region));
+    }
+    setTourStep(step);
+  };
+  const nextStep = () => {
+    if (tourStep === null) return;
+    goToStep(tourStep + 1 >= TOUR_STEPS.length ? null : tourStep + 1);
+  };
+  const backStep = () => {
+    if (tourStep !== null) goToStep(Math.max(0, tourStep - 1));
+  };
 
   const setFraction = (id: string, pct: number) => {
     setFractions((prev) => ({ ...prev, [id]: pct / 100 }));
@@ -306,6 +327,37 @@ export function App() {
           ? 'Edit: lock out (click to toggle; never selected)'
           : 'Edit: clear lock status';
 
+  // The selected-priorities map is the shared result view, shown on both tabs.
+  const priorityMap = (
+    <GridView
+      gridSize={SCENARIO.gridSize}
+      caption="Selected priorities"
+      fill={(id) => (selectedSet.has(id) ? SELECTED : UNSELECTED)}
+      selected={selectedSet}
+      border={statusBorder}
+      onInspect={setInspected}
+      inspectedId={inspected}
+    />
+  );
+
+  const locksLegend = (
+    <ul className="legend">
+      {LEGEND.map((item) => (
+        <li key={item.label}>
+          <span
+            className="legend-swatch"
+            style={
+              item.kind === 'fill'
+                ? { background: item.color }
+                : { border: `2px solid ${item.color}`, background: 'var(--surface)' }
+            }
+          />
+          {item.label}
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <main className={tourActive ? 'app tour-active' : 'app'} ref={rootRef}>
       <div className={`title-row${tourHi('intro')}`} data-region="intro">
@@ -326,149 +378,178 @@ export function App() {
           >
             {copied ? 'Link copied' : 'Copy link'}
           </button>
-          <button type="button" className="tour-start" onClick={() => setTourStep(0)}>
+          <button type="button" className="tour-start" onClick={() => goToStep(0)}>
             Guided tour
           </button>
         </div>
       </div>
 
+      <div className="tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'explore'}
+          className={view === 'explore' ? 'tab tab-on' : 'tab'}
+          onClick={() => setView('explore')}
+        >
+          Explore
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'method'}
+          className={view === 'method' ? 'tab tab-on' : 'tab'}
+          onClick={() => setView('method')}
+        >
+          Method (advanced)
+        </button>
+      </div>
+
       <div className="layout">
         <div className="sidebar">
-          <section
-            className={`panel controls${tourHi('targets')}`}
-            data-region="targets"
-          >
-            <h2>Targets</h2>
-            {SCENARIO.features.map((f) => {
-              const pct = Math.round((fractions[f.id] ?? 0) * 100);
-              return (
-                <label className="control" key={f.id}>
+          {view === 'explore' && (
+            <>
+              <section
+                className={`panel controls${tourHi('targets')}`}
+                data-region="targets"
+              >
+                <h2>Targets</h2>
+                {SCENARIO.features.map((f) => {
+                  const pct = Math.round((fractions[f.id] ?? 0) * 100);
+                  return (
+                    <label className="control" key={f.id}>
+                      <span className="control-label">
+                        <span className="swatch" style={{ background: f.color }} />
+                        {f.name}: {pct}%
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={pct}
+                        onChange={(e) => setFraction(f.id, Number(e.target.value))}
+                      />
+                    </label>
+                  );
+                })}
+              </section>
+
+              <section className={`panel controls${tourHi('edit')}`} data-region="edit">
+                <h2>Edit tools</h2>
+                <div className="tool-row">
+                  {TOOLS.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={t.id === brush.tool ? 'tool tool-on' : 'tool'}
+                      onClick={() => setBrush((b) => ({ ...b, tool: t.id }))}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {brush.tool === 'cover' && (
+                  <div className="tool-row">
+                    {COVERS.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={c.id === brush.cover ? 'tool tool-on' : 'tool'}
+                        onClick={() => setBrush((b) => ({ ...b, cover: c.id }))}
+                      >
+                        <span className="swatch" style={{ background: c.color }} />
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="edit-actions">
+                  <span className="hint">Click or drag on the edit map.</span>
+                  <button
+                    type="button"
+                    className="reset"
+                    onClick={reset}
+                    disabled={!edited}
+                  >
+                    Reset landscape
+                  </button>
+                </div>
+              </section>
+            </>
+          )}
+
+          {view === 'method' && (
+            <section className="panel controls">
+              <h2>Objective and weights</h2>
+              <div className="tool-row">
+                <button
+                  type="button"
+                  className={objective === 'min-set' ? 'tool tool-on' : 'tool'}
+                  onClick={() => setObjective('min-set')}
+                >
+                  Minimum set
+                </button>
+                <button
+                  type="button"
+                  className={objective === 'max-coverage' ? 'tool tool-on' : 'tool'}
+                  onClick={() => setObjective('max-coverage')}
+                >
+                  Max coverage
+                </button>
+              </div>
+
+              {objective === 'max-coverage' && (
+                <label className="control">
                   <span className="control-label">
-                    <span className="swatch" style={{ background: f.color }} />
-                    {f.name}: {pct}%
+                    Budget: {budget} ({budgetPct}% of landscape)
                   </span>
                   <input
                     type="range"
                     min={0}
                     max={100}
-                    value={pct}
-                    onChange={(e) => setFraction(f.id, Number(e.target.value))}
+                    value={budgetPct}
+                    onChange={(e) => setBudgetPct(Number(e.target.value))}
                   />
                 </label>
-              );
-            })}
-          </section>
+              )}
 
-          <section className={`panel controls${tourHi('edit')}`} data-region="edit">
-            <h2>Edit tools</h2>
-            <div className="tool-row">
-              {TOOLS.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  className={t.id === brush.tool ? 'tool tool-on' : 'tool'}
-                  onClick={() => setBrush((b) => ({ ...b, tool: t.id }))}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {brush.tool === 'cover' && (
-              <div className="tool-row">
-                {COVERS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={c.id === brush.cover ? 'tool tool-on' : 'tool'}
-                    onClick={() => setBrush((b) => ({ ...b, cover: c.id }))}
-                  >
-                    <span className="swatch" style={{ background: c.color }} />
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="edit-actions">
-              <span className="hint">Click or drag on the edit map.</span>
-              <button
-                type="button"
-                className="reset"
-                onClick={reset}
-                disabled={!edited}
-              >
-                Reset landscape
-              </button>
-            </div>
-          </section>
-
-          <section className="panel controls">
-            <h2>Method (advanced)</h2>
-            <div className="tool-row">
-              <button
-                type="button"
-                className={objective === 'min-set' ? 'tool tool-on' : 'tool'}
-                onClick={() => setObjective('min-set')}
-              >
-                Minimum set
-              </button>
-              <button
-                type="button"
-                className={objective === 'max-coverage' ? 'tool tool-on' : 'tool'}
-                onClick={() => setObjective('max-coverage')}
-              >
-                Max coverage
-              </button>
-            </div>
-
-            {objective === 'max-coverage' && (
               <label className="control">
-                <span className="control-label">
-                  Budget: {budget} ({budgetPct}% of landscape)
-                </span>
+                <span className="control-label">Compactness: {boundaryPenalty}</span>
                 <input
                   type="range"
                   min={0}
-                  max={100}
-                  value={budgetPct}
-                  onChange={(e) => setBudgetPct(Number(e.target.value))}
+                  max={5}
+                  step={0.5}
+                  value={boundaryPenalty}
+                  onChange={(e) => setBoundaryPenalty(Number(e.target.value))}
                 />
               </label>
-            )}
 
-            <label className="control">
-              <span className="control-label">Compactness: {boundaryPenalty}</span>
-              <input
-                type="range"
-                min={0}
-                max={5}
-                step={0.5}
-                value={boundaryPenalty}
-                onChange={(e) => setBoundaryPenalty(Number(e.target.value))}
-              />
-            </label>
-
-            <div className="control">
-              <span className="control-label">Feature weights</span>
-              {SCENARIO.features.map((f) => (
-                <label className="weight-row" key={f.id}>
-                  <span className="swatch" style={{ background: f.color }} />
-                  <input
-                    type="range"
-                    min={0}
-                    max={3}
-                    step={0.5}
-                    value={weights[f.id] ?? 1}
-                    onChange={(e) =>
-                      setWeights((w) => ({ ...w, [f.id]: Number(e.target.value) }))
-                    }
-                  />
-                  <span className="weight-val">{(weights[f.id] ?? 1).toFixed(1)}</span>
-                </label>
-              ))}
-            </div>
-          </section>
+              <div className="control">
+                <span className="control-label">Feature weights</span>
+                {SCENARIO.features.map((f) => (
+                  <label className="weight-row" key={f.id}>
+                    <span className="swatch" style={{ background: f.color }} />
+                    <input
+                      type="range"
+                      min={0}
+                      max={3}
+                      step={0.5}
+                      value={weights[f.id] ?? 1}
+                      onChange={(e) =>
+                        setWeights((w) => ({ ...w, [f.id]: Number(e.target.value) }))
+                      }
+                    />
+                    <span className="weight-val">
+                      {(weights[f.id] ?? 1).toFixed(1)}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
         <section className="results">
@@ -529,161 +610,161 @@ export function App() {
             )}
           </div>
 
-          <div className="editor-row">
-            <div className={`editor-map${tourHi('priority')}`} data-region="priority">
-              <h2>Priority areas</h2>
-              <div className="maps">
-                <GridView
-                  gridSize={SCENARIO.gridSize}
-                  caption="Selected priorities"
-                  fill={(id) => (selectedSet.has(id) ? SELECTED : UNSELECTED)}
-                  selected={selectedSet}
-                  border={statusBorder}
-                  onInspect={setInspected}
-                  inspectedId={inspected}
-                />
-                <GridView
-                  gridSize={SCENARIO.gridSize}
-                  caption={editCaption}
-                  fill={coverFill}
-                  border={statusBorder}
-                  onPaint={paint}
-                  onInspect={setInspected}
-                  inspectedId={inspected}
-                />
-              </div>
-              <ul className="legend">
-                {LEGEND.map((item) => (
-                  <li key={item.label}>
-                    <span
-                      className="legend-swatch"
-                      style={
-                        item.kind === 'fill'
-                          ? { background: item.color }
-                          : {
-                              border: `2px solid ${item.color}`,
-                              background: 'var(--surface)',
-                            }
-                      }
+          {view === 'explore' && (
+            <>
+              <div className="editor-row">
+                <div
+                  className={`editor-map${tourHi('priority')}`}
+                  data-region="priority"
+                >
+                  <h2>Priority areas</h2>
+                  <div className="maps">
+                    {priorityMap}
+                    <GridView
+                      gridSize={SCENARIO.gridSize}
+                      caption={editCaption}
+                      fill={coverFill}
+                      border={statusBorder}
+                      onPaint={paint}
+                      onInspect={setInspected}
+                      inspectedId={inspected}
                     />
-                    {item.label}
-                  </li>
-                ))}
-              </ul>
-              <ul className="legend">
-                {COVERS.map((c) => (
-                  <li key={c.id}>
-                    <span className="legend-swatch" style={{ background: c.color }} />
-                    {c.name}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className={`curve-wrap${tourHi('curve')}`} data-region="curve">
-              <CostTargetCurve
-                units={units}
-                fractions={fractions}
-                focusId={curveFocus}
-                focusName={featureName(curveFocus)}
-                color={featureColor(curveFocus)}
-              />
-            </div>
-          </div>
-
-          <div className="curve-select">
-            <span className="hint">Cost curve for:</span>
-            {SCENARIO.features.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className={f.id === curveFocus ? 'tool tool-on' : 'tool'}
-                onClick={() => setCurveFocus(f.id)}
-              >
-                {f.name.replace(' species', '')}
-              </button>
-            ))}
-          </div>
-
-          <div className="panel compare">
-            <div className="compare-head">
-              <h2>Greedy vs exact optimum</h2>
-              <button
-                type="button"
-                className="tool"
-                onClick={runCompare}
-                disabled={comparing}
-              >
-                {comparing ? 'Solving...' : 'Compute exact optimum'}
-              </button>
-            </div>
-            {comparison === null ? (
-              <p className="hint">
-                Minimum-set only. Compares the greedy heuristic against the exact
-                optimum for the current landscape and targets.
-              </p>
-            ) : comparison.exact.feasible ? (
-              <div className="compare-body">
-                <div className="stats">
-                  <div className="stat">
-                    <span className="stat-label">Greedy cost</span>
-                    <span className="stat-value">{comparison.cmp.greedyCost}</span>
                   </div>
-                  <div className="stat">
-                    <span className="stat-label">Exact cost</span>
-                    <span className="stat-value">{comparison.cmp.exactCost}</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-label">Gap</span>
-                    <span className="stat-value">
-                      {comparison.cmp.gap} ({comparison.cmp.gapPct.toFixed(1)}%)
-                    </span>
-                  </div>
+                  {locksLegend}
+                  <ul className="legend">
+                    {COVERS.map((c) => (
+                      <li key={c.id}>
+                        <span
+                          className="legend-swatch"
+                          style={{ background: c.color }}
+                        />
+                        {c.name}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
+              </div>
+
+              <div
+                className={`feature-section${tourHi('features')}`}
+                data-region="features"
+              >
+                <h2>Derived from land cover</h2>
+                <p className="hint">
+                  Cost and each species&apos; habitat are computed from the cover you
+                  paint, not set directly.
+                </p>
                 <div className="maps">
                   <GridView
                     gridSize={SCENARIO.gridSize}
-                    caption="Both green; greedy-only amber; exact-only blue"
-                    fill={diffFill(comparison.cmp)}
+                    caption="Cost to protect (darker = pricier)"
+                    fill={costFill}
+                    onInspect={setInspected}
+                    inspectedId={inspected}
                   />
+                  {SCENARIO.features.map((f) => (
+                    <GridView
+                      key={f.id}
+                      gridSize={SCENARIO.gridSize}
+                      caption={`${f.name} habitat (darker = more)`}
+                      fill={featureFill(f.id)}
+                      onInspect={setInspected}
+                      inspectedId={inspected}
+                    />
+                  ))}
                 </div>
               </div>
-            ) : (
-              <p className="info">
-                The current targets are infeasible, so there is no exact optimum to
-                compare.
-              </p>
-            )}
-          </div>
+            </>
+          )}
 
-          <div
-            className={`feature-section${tourHi('features')}`}
-            data-region="features"
-          >
-            <h2>Derived from land cover</h2>
-            <p className="hint">
-              Cost and each species&apos; habitat are computed from the cover you paint,
-              not set directly.
-            </p>
-            <div className="maps">
-              <GridView
-                gridSize={SCENARIO.gridSize}
-                caption="Cost to protect (darker = pricier)"
-                fill={costFill}
-                onInspect={setInspected}
-                inspectedId={inspected}
-              />
-              {SCENARIO.features.map((f) => (
-                <GridView
-                  key={f.id}
-                  gridSize={SCENARIO.gridSize}
-                  caption={`${f.name} habitat (darker = more)`}
-                  fill={featureFill(f.id)}
-                  onInspect={setInspected}
-                  inspectedId={inspected}
+          {view === 'method' && (
+            <div className="editor-row">
+              <div className="editor-map">
+                <h2>Priority areas</h2>
+                <div className="maps">{priorityMap}</div>
+                {locksLegend}
+              </div>
+              <div className={`curve-wrap${tourHi('curve')}`} data-region="curve">
+                <CostTargetCurve
+                  units={units}
+                  fractions={fractions}
+                  focusId={curveFocus}
+                  focusName={featureName(curveFocus)}
+                  color={featureColor(curveFocus)}
                 />
-              ))}
+                <p className="curve-explain">
+                  As you ask to protect more of a species, the cheapest plan that meets
+                  it costs more. The dot marks your current target.
+                </p>
+                <div className="curve-select">
+                  <span className="hint">Cost curve for:</span>
+                  {SCENARIO.features.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      className={f.id === curveFocus ? 'tool tool-on' : 'tool'}
+                      onClick={() => setCurveFocus(f.id)}
+                    >
+                      {f.name.replace(' species', '')}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {view === 'method' && (
+            <div className="panel compare">
+              <div className="compare-head">
+                <h2>Greedy vs exact optimum</h2>
+                <button
+                  type="button"
+                  className="tool"
+                  onClick={runCompare}
+                  disabled={comparing}
+                >
+                  {comparing ? 'Solving...' : 'Compute exact optimum'}
+                </button>
+              </div>
+              {comparison === null ? (
+                <p className="hint">
+                  Minimum-set only. Compares the greedy heuristic against the exact
+                  optimum for the current landscape and targets.
+                </p>
+              ) : comparison.exact.feasible ? (
+                <div className="compare-body">
+                  <div className="stats">
+                    <div className="stat">
+                      <span className="stat-label">Greedy cost</span>
+                      <span className="stat-value">{comparison.cmp.greedyCost}</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-label">Exact cost</span>
+                      <span className="stat-value">{comparison.cmp.exactCost}</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-label">Gap</span>
+                      <span className="stat-value">
+                        {comparison.cmp.gap} ({comparison.cmp.gapPct.toFixed(1)}%)
+                      </span>
+                    </div>
+                  </div>
+                  <div className="maps">
+                    <GridView
+                      gridSize={SCENARIO.gridSize}
+                      caption="Both green; greedy-only amber; exact-only blue"
+                      fill={diffFill(comparison.cmp)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="info">
+                  The current targets are infeasible, so there is no exact optimum to
+                  compare.
+                </p>
+              )}
+            </div>
+          )}
 
           {inspectedUnit && inspectedExplain && (
             <div className="panel inspector">
@@ -742,51 +823,53 @@ export function App() {
             </div>
           )}
 
-          <div className="feature-section">
-            <h2>The rules (advanced)</h2>
-            <p className="hint">
-              How every cell&apos;s numbers are computed. Habitat = suitability x
-              habitat quality x {SPECIES_PEAK}; cost is the cover base cost, nudged by
-              local variation.
-            </p>
-            <div className="rules-wrap">
-              <table className="rules">
-                <caption>Suitability (species x cover)</caption>
-                <thead>
-                  <tr>
-                    <th />
-                    {COVERS.map((c) => (
-                      <th key={c.id}>
-                        <span className="swatch" style={{ background: c.color }} />
-                        {c.name}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {SCENARIO.features.map((f) => (
-                    <tr key={f.id}>
-                      <th>{featureName(f.id)}</th>
-                      {COVERS.map((c) => {
-                        const v = SUITABILITY[f.id]?.[c.id] ?? 0;
-                        return (
-                          <td key={c.id} className={v === 0 ? 'zero' : undefined}>
-                            {v.toFixed(2)}
-                          </td>
-                        );
-                      })}
+          {view === 'method' && (
+            <div className="feature-section">
+              <h2>The rules</h2>
+              <p className="hint">
+                How every cell&apos;s numbers are computed. Habitat = suitability x
+                habitat quality x {SPECIES_PEAK}; cost is the cover base cost, nudged by
+                local variation.
+              </p>
+              <div className="rules-wrap">
+                <table className="rules">
+                  <caption>Suitability (species x cover)</caption>
+                  <thead>
+                    <tr>
+                      <th />
+                      {COVERS.map((c) => (
+                        <th key={c.id}>
+                          <span className="swatch" style={{ background: c.color }} />
+                          {c.name}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                  <tr>
-                    <th>Base cost</th>
-                    {COVERS.map((c) => (
-                      <td key={c.id}>{baseCostOf(c.id)}</td>
+                  </thead>
+                  <tbody>
+                    {SCENARIO.features.map((f) => (
+                      <tr key={f.id}>
+                        <th>{featureName(f.id)}</th>
+                        {COVERS.map((c) => {
+                          const v = SUITABILITY[f.id]?.[c.id] ?? 0;
+                          return (
+                            <td key={c.id} className={v === 0 ? 'zero' : undefined}>
+                              {v.toFixed(2)}
+                            </td>
+                          );
+                        })}
+                      </tr>
                     ))}
-                  </tr>
-                </tbody>
-              </table>
+                    <tr>
+                      <th>Base cost</th>
+                      {COVERS.map((c) => (
+                        <td key={c.id}>{baseCostOf(c.id)}</td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </section>
       </div>
 

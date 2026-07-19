@@ -53,6 +53,16 @@ test('a fully edited state round-trips exactly', () => {
   expect(decoded!.units[50]).toEqual(base[50]);
 });
 
+test('the active view round-trips and counts as non-default', () => {
+  const state = defaultState();
+  state.view = 'method';
+  expect(isDefaultState(state)).toBe(false);
+  const decoded = decodeState(encodeState(state));
+  expect(decoded!.view).toBe('method');
+  // The default view stays clean.
+  expect(decodeState(encodeState(defaultState()))!.view).toBe('explore');
+});
+
 test('an edited state is not treated as default', () => {
   expect(isDefaultState(editedState())).toBe(false);
   expect(hasUnitEdits(editedState().units)).toBe(true);

@@ -202,6 +202,39 @@ body {
   background: #155e2b;
 }
 
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 1.25rem 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tab-on {
+  color: #1b7837;
+  border-bottom-color: #1b7837;
+}
+
+.curve-explain {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(14rem, 18rem) 1fr;
