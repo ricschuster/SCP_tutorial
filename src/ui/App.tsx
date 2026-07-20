@@ -47,6 +47,7 @@ import { GridView } from './GridView.tsx';
 import { CostTargetCurve } from './CostTargetCurve.tsx';
 import { TourPanel } from './TourPanel.tsx';
 import { AboutPanel } from './AboutPanel.tsx';
+import { Tooltip } from './Tooltip.tsx';
 import { SHORT_TOUR_LENGTH, TOUR_STEPS, type TourRegion } from './tour.ts';
 import { mix, type Rgb } from './color.ts';
 
@@ -581,7 +582,7 @@ export function App() {
         checked={showIrrep}
         onChange={(e) => setShowIrrep(e.target.checked)}
       />
-      Show irreplaceability
+      Show irreplaceability <Tooltip term="irreplaceability" />
     </label>
   );
 
@@ -688,7 +689,9 @@ export function App() {
                 className={`panel controls${tourHi('targets')}`}
                 data-region="targets"
               >
-                <h2>Targets</h2>
+                <h2>
+                  Targets <Tooltip term="targets" />
+                </h2>
                 {SCENARIO.features.map((f) => {
                   const pct = Math.round((fractions[f.id] ?? 0) * 100);
                   return (
@@ -710,7 +713,9 @@ export function App() {
               </section>
 
               <section className={`panel controls${tourHi('edit')}`} data-region="edit">
-                <h2>Edit tools</h2>
+                <h2>
+                  Edit tools <Tooltip term="locks" />
+                </h2>
                 <div className="tool-row">
                   {TOOLS.map((t) => (
                     <button
@@ -757,7 +762,9 @@ export function App() {
 
           {view === 'method' && (
             <section className="panel controls">
-              <h2>Objective and weights</h2>
+              <h2>
+                Objective and weights <Tooltip term="objective" />
+              </h2>
               <div className="tool-row">
                 <button
                   type="button"
@@ -778,7 +785,8 @@ export function App() {
               {objective === 'max-coverage' && (
                 <label className="control">
                   <span className="control-label">
-                    Budget: {budget} ({budgetPct}% of landscape)
+                    Budget: {budget} ({budgetPct}% of landscape){' '}
+                    <Tooltip term="budget" />
                   </span>
                   <input
                     type="range"
@@ -791,7 +799,9 @@ export function App() {
               )}
 
               <label className="control">
-                <span className="control-label">Compactness: {boundaryPenalty}</span>
+                <span className="control-label">
+                  Compactness: {boundaryPenalty} <Tooltip term="compactness" />
+                </span>
                 <input
                   type="range"
                   min={0}
@@ -807,7 +817,7 @@ export function App() {
                 data-region="connectivity"
               >
                 <span className="control-label">
-                  Connectivity: {connectivityPenalty}
+                  Connectivity: {connectivityPenalty} <Tooltip term="connectivity" />
                 </span>
                 <input
                   type="range"
@@ -836,7 +846,9 @@ export function App() {
               </p>
 
               <div className="control">
-                <span className="control-label">Feature weights</span>
+                <span className="control-label">
+                  Feature weights <Tooltip term="weights" />
+                </span>
                 {SCENARIO.features.map((f) => (
                   <label className="weight-row" key={f.id}>
                     <span className="swatch" style={{ background: f.color }} />
@@ -975,7 +987,9 @@ export function App() {
                 className={`feature-section${tourHi('features')}`}
                 data-region="features"
               >
-                <h2>Derived from land cover</h2>
+                <h2>
+                  Derived from land cover <Tooltip term="cost" />
+                </h2>
                 <p className="hint">
                   Cost and habitat are computed from the cover you paint, not set
                   directly. Every habitat map uses one scale (darker = more), so the
@@ -999,7 +1013,9 @@ export function App() {
                   />
                   <div className="spotlight">
                     <label className="spotlight-select">
-                      <span className="hint">View species habitat:</span>
+                      <span className="hint">
+                        View species habitat: <Tooltip term="spotlight" />
+                      </span>
                       <select
                         value={spotlight}
                         onChange={(e) => setSpotlight(e.target.value)}
@@ -1051,7 +1067,9 @@ export function App() {
                   it costs more. The dot marks your current target.
                 </p>
                 <div className="curve-select">
-                  <span className="hint">Cost curve for:</span>
+                  <span className="hint">
+                    Cost curve for: <Tooltip term="curve" />
+                  </span>
                   {SCENARIO.features.map((f) => (
                     <button
                       key={f.id}
@@ -1070,7 +1088,9 @@ export function App() {
           {view === 'method' && (
             <div className={`panel compare${tourHi('compare')}`} data-region="compare">
               <div className="compare-head">
-                <h2>Greedy vs near-optimal optimum</h2>
+                <h2>
+                  Greedy vs near-optimal optimum <Tooltip term="compare" />
+                </h2>
                 <button
                   type="button"
                   className="tool"
