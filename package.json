@@ -18,7 +18,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "highs": "^1.15.1",
+    "highs": "^1.15.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
